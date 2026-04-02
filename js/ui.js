@@ -277,8 +277,8 @@ function normalizeTheme(raw) {
 }
 
 function normalizeTab(raw) {
-  var valid = { optimizer:1, sandbox:1, plan:1, progress:1, professions:1, foods:1, memories:1, data:1 };
-  return valid[raw] ? raw : "optimizer";
+  var valid = { home:1, optimizer:1, sandbox:1, plan:1, progress:1, professions:1, foods:1, memories:1, data:1 };
+  return valid[raw] ? raw : "home";
 }
 
 function normalizeProfessionMode(raw) {
@@ -314,7 +314,7 @@ function defaultProfile() {
     useInventory: true,
     excludeBioFlesh: false,
     excludeArtifact: false,
-    activeTab: "optimizer",
+    activeTab: "home",
     optimizerSessionAware: false,
     optimizerSessionNoDeficit: false,
     optimizerSessionId: null,
@@ -1527,7 +1527,7 @@ function applyPlanToInventory(result) {
 
 function setActiveTab(tabName) {
   appState.activeTab = normalizeTab(tabName);
-  ["optimizer", "sandbox", "plan", "progress", "professions", "foods", "memories", "data"].forEach(function(tab) {
+  ["home", "optimizer", "sandbox", "plan", "progress", "professions", "foods", "memories", "data"].forEach(function(tab) {
     var button = el("tab-btn-" + tab);
     var panel = el("tab-" + tab);
     var isActive = tab === appState.activeTab;

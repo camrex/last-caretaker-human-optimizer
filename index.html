@@ -29,7 +29,8 @@
   </div>
 
   <div class="tab-bar" aria-label="App sections">
-    <button type="button" class="tab-btn active" id="tab-btn-optimizer" data-tab="optimizer">Optimizer</button>
+    <button type="button" class="tab-btn active" id="tab-btn-home" data-tab="home">Home</button>
+    <button type="button" class="tab-btn" id="tab-btn-optimizer" data-tab="optimizer">Optimizer</button>
     <button type="button" class="tab-btn" id="tab-btn-sandbox" data-tab="sandbox">Sandbox</button>
     <button type="button" class="tab-btn" id="tab-btn-plan" data-tab="plan">Plan</button>
     <button type="button" class="tab-btn" id="tab-btn-progress" data-tab="progress">Progress</button>
@@ -39,7 +40,82 @@
     <button type="button" class="tab-btn" id="tab-btn-data" data-tab="data">Data</button>
   </div>
 
-  <section id="tab-optimizer" class="tab-panel">
+  <section id="tab-home" class="tab-panel">
+    <div class="warn-box">
+      <strong>Spoiler warning:</strong> this site contains profession, trait, planning, and progression information that may spoil discovery in The Last Caretaker.
+    </div>
+
+    <div class="home-hero">
+      <aside class="home-peco-easter" aria-label="PECO terminal easter egg">
+        <pre class="home-peco-console"><span class="home-peco-line home-peco-line-top"> SYSTEM                      ID: Hall of Humanity</span>
+      ============================================
+     = ####   ####   ####   ####   ##   ##  =====
+    == #   #  #      #      #  #    #  #  # ====
+   === ####   ####   #      #  #    #  #  # ===
+  ==== #      #      #      #  #    #  #  # ==
+ ===== #      ####   ####   ####    # # ##  =
+============================================
+&gt; ssh root@81.29.9.1
+
+System Boot Sequence Initiated..
+
+Loading Bios..................................................[OK]
+Performing POST (Power-On Self Test)..........................[OK]
+Detecting Primary Master Drive................................[OK]
+Performing System Diagnostics.................................[OK]
+Setting Up Virtual Memory.....................................[OK]
+System Boot Complete.
+
+Welcome to PECO!
+
+
+OPTIMIZER
+SANDBOX
+PLAN
+PROGRESS
+PROFESSIONS
+FOOD
+MEMORIES
+DATA
+<span class="home-peco-line home-peco-line-bottom">PECO TERMINAL 1.0 - (c) All rights reserved.</span>
+        </pre>
+      </aside>
+    </div>
+
+    <div class="home-hero-main">
+      <div class="section-label">Welcome</div>
+      <h2 class="home-title">Plan and track your Hall of Humanity workflow</h2>
+      <p class="muted inventory-note">This app helps you optimize food and memories, model session and rocket plans, and track progress toward profession completion in The Last Caretaker.</p>
+    </div>
+
+    <div class="section-label">What is available</div>
+    <div class="home-feature-grid">
+      <div class="home-feature-card"><strong>Optimizer</strong><span>Build the best food + memory plan for a profession, with inventory and session-aware constraints.</span></div>
+      <div class="home-feature-card"><strong>Sandbox</strong><span>Test custom quantities, inspect resulting traits, and preview likely satisfied professions.</span></div>
+      <div class="home-feature-card"><strong>Plan</strong><span>Organize sessions, assign rockets, and identify both per-session and global crafting deficits.</span></div>
+      <div class="home-feature-card"><strong>Progress</strong><span>Track planned/created professions and committee completion in one view.</span></div>
+      <div class="home-feature-card"><strong>Reference tabs</strong><span>Browse professions, foods, and memories while editing inventory directly from cards.</span></div>
+      <div class="home-feature-card"><strong>Data</strong><span>Export and import your planning profile to back up and restore local state.</span></div>
+    </div>
+
+    <div class="section-label">Suggested flow</div>
+    <div class="stack-list">
+      <div class="info-box">1. Use <strong>Optimizer</strong> or <strong>Sandbox</strong> to design candidate humans.</div>
+      <div class="info-box">2. Add them to <strong>Plan</strong> and review session shortages before crafting.</div>
+      <div class="info-box">3. Track completion in <strong>Progress</strong> and periodically back up through <strong>Data</strong>.</div>
+    </div>
+
+    <div class="section-label">Project notice</div>
+    <div class="warn-box home-disclaimer">
+      <div class="warn-title">Fan-made and unofficial</div>
+      <p>This is a fan-made tool and is not affiliated with, endorsed by, or supported by Channel37 or The Last Caretaker team.</p>
+      <p>Data accuracy cannot be guaranteed. Values and requirements have been verified as carefully as possible and will continue to be updated.</p>
+      <p>If you find bugs or incorrect data, please submit an issue on GitHub. This project is open source and community feedback is welcome.</p>
+      <p><a href="https://github.com/camrex/last-caretaker-human-optimizer/issues" target="_blank" rel="noopener noreferrer">Report an issue on GitHub</a></p>
+    </div>
+  </section>
+
+  <section id="tab-optimizer" class="tab-panel is-hidden">
     <!-- Profession selector -->
     <div class="row2">
       <div>

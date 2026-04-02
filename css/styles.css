@@ -203,6 +203,15 @@ body.theme-peco .inventory-note {
   text-shadow: 0 0 7px rgba(27, 224, 102, 0.22);
 }
 
+body.theme-peco .home-peco-easter {
+  display: block;
+  text-align: left;
+}
+
+body.theme-peco .home-peco-console {
+  text-shadow: 0 0 6px rgba(31, 255, 126, 0.2);
+}
+
 /* ─── Layout ────────────────────────────────────────────────────────────────── */
 .container {
   max-width: 800px;
@@ -263,6 +272,90 @@ body.theme-peco .inventory-note {
 
 .tab-panel {
   animation: panelFade .16s ease-out;
+}
+
+.home-hero {
+  margin-bottom: .75rem;
+}
+
+.home-hero-main {
+  margin-bottom: .75rem;
+}
+
+.home-title {
+  font-size: 20px;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.home-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-bottom: .5rem;
+}
+
+.home-feature-card {
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-secondary);
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.home-feature-card strong {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.home-feature-card span {
+  font-size: 12px;
+  color: var(--text-sec);
+  line-height: 1.45;
+}
+
+.home-disclaimer p {
+  margin-bottom: 7px;
+}
+
+.home-disclaimer p:last-child {
+  margin-bottom: 0;
+}
+
+.home-disclaimer a {
+  color: inherit;
+}
+
+.home-peco-easter {
+  display: none;
+}
+
+.home-peco-console {
+  display: block;
+  margin: 0;
+  max-width: 100%;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: #1be066;
+  font-size: 11px;
+  line-height: 1.1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: pre;
+}
+
+.home-peco-line {
+  display: block;
+  text-align: center;
+}
+
+.home-peco-line-top,
+.home-peco-line-bottom {
+  background: linear-gradient(180deg, rgba(33, 255, 123, 0.05) 0%, rgba(33, 255, 123, 0.22) 48%, rgba(33, 255, 123, 0.05) 100%);
+  text-shadow: 0 0 8px rgba(36, 255, 124, 0.55), 0 0 2px rgba(36, 255, 124, 0.95);
 }
 
 @keyframes panelFade {
@@ -1278,6 +1371,10 @@ strong { font-weight: 500; }
 @media (max-width: 760px) {
   .app-header-top {
     flex-direction: column;
+  }
+
+  .home-title {
+    font-size: 18px;
   }
 
   .theme-picker-wrap {

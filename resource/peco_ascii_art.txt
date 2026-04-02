@@ -1,0 +1,33 @@
+                                       SYSTEM                     ID: Hall of Humanity
+      ============================================
+     = ####   ####   ####   ####   ##   ##  =====
+    == #   #  #      #      #  #    #  #  # ====
+   === ####   ####   #      #  #    #  #  # ===
+  ==== #      #      #      #  #    #  #  # ==
+ ===== #      ####   ####   ####    # # ##  =
+============================================
+> ssh root@81.29.9.1
+
+System Boot Sequence Initiated..
+
+Loading Bios..................................................[OK]
+Performing POST (Power-On Self Test)..........................[OK]
+Detecting Primary Master Drive................................[OK]
+Performing System Diagnostics.................................[OK]
+Setting Up Virtual Memory.....................................[OK]
+System Boot Complete.
+
+Welcome to PECO!
+
+
+
+
+OPTIMIZER
+SANDBOX
+PLAN
+PROGRESS
+PROFESSIONS
+FOOD
+MEMORIES
+DATA
+                    PECO TERMINAL 1.0 - (c) All rights reserved.

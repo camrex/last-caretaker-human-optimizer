@@ -3,6 +3,9 @@
 A lightweight web app for calculating the optimal food and memory combination
 to grow a human for any profession in The Last Caretaker.
 
+> [!WARNING]
+> Spoilers ahead: this project includes profession, trait, planning, and progression information that may reveal discovery content in The Last Caretaker.
+
 ## Quick start
 
 Open `index.html` in any browser. No server required.
@@ -19,7 +22,7 @@ If you want live-reload during development, any of these work:
 last-caretaker/
 ├── index.html          Main app
 ├── css/
-│   └── styles.css      All styling (light + dark mode)
+│   └── styles.css      All styling (default + PECO theme)
 ├── js/
 │   ├── optimizer.js    Core optimization logic (no DOM dependency)
 │   └── ui.js           Rendering and event handling
@@ -51,35 +54,15 @@ Notes:
 
 ## Hosting on GitHub Pages
 
-This app is fully static, so it can be hosted directly on GitHub Pages.
+Live site:
 
-### One-time setup
+- <https://camrex.github.io/last-caretaker-human-optimizer/>
 
-1. Push this project to a GitHub repository.
-2. In the repository, go to **Settings → Pages**.
-3. Under **Build and deployment**:
-    - Source: **Deploy from a branch**
-    - Branch: **main** (or your default branch)
-    - Folder: **/** (root)
-4. Click **Save**.
+For maintainers: deployment steps and release checklist are in `docs/deploy.md`.
 
-GitHub will publish the site at a URL like:
+Notes:
 
-- `https://<your-username>.github.io/<repo-name>/`
-
-### Pre-deploy checklist
-
-Before pushing changes to deploy:
-
-1. Regenerate data from workbook:
-    - `e:/DevProjects/last-caretaker-human-optimizer/.venv/Scripts/python.exe scripts/sync_tables_from_excel.py --write`
-2. Verify sync state:
-    - `e:/DevProjects/last-caretaker-human-optimizer/.venv/Scripts/python.exe scripts/sync_tables_from_excel.py --check`
-3. Commit and push.
-
-### Notes
-
-- `localStorage` (inventory, created professions, theme) works on GitHub Pages.
+- `localStorage` (inventory, plan/session state, created professions, settings, theme) works on GitHub Pages.
 - Data is browser-local per device/browser profile.
 - No backend/server is required.
 
@@ -112,13 +95,15 @@ Bio-stuff is farmed and processed into food ingredients at approximately 1:1
 - You can select professions using either **Committee then profession** or **Direct profession selection** mode.
 - Use the **Progress** tab to mark professions as created and track committee completion.
 - The **Optimizer** tab still includes quick mark/unmark actions for the currently selected profession.
-- Use **Export planning JSON** / **Import planning JSON** to back up and restore full plan state, including profession selection/mode, baseline sliders, toggles, inventory mode, theme, inventory counts, and created professions.
+- Use **Export planning JSON** / **Import planning JSON** to back up and restore profile state, including profession selection/mode, baseline sliders, toggles, inventory mode, theme, inventory counts, created professions, and plan/session/rocket data.
 - No server-side storage is used.
 
 ### Tabs
 
+- **Home:** overview, spoiler warning, project notice, and PECO-theme easter egg terminal screen.
 - **Optimizer:** build a plan for a specific profession and review Ash Notebook recommendations.
 - **Sandbox:** set custom food/memory quantities and preview resulting traits plus potentially satisfied professions.
+- **Plan:** organize sessions, store planned humans, assign rockets, and review deficits.
 - **Progress:** track created professions, filter remaining work, and monitor committee completion.
 - **Professions:** browse profession requirements, filter by committee/tier/status, and mark created/uncreated.
 - **Foods:** browse food data and manage food inventory directly on cards.
@@ -132,3 +117,4 @@ Bio-stuff is farmed and processed into food ingredients at approximately 1:1
 - [ ] Human tracking + rocket planning bridge: support adding already-created humans (outside a plan) into rocket plans.
 - [ ] Human seed tracking: track seed availability and remaining seeds per known location.
 - [ ] Ensure full data portability: include all plan/tracking state in Data Export/Import.
+- [ ] Add a non-spoiler mode that hides or masks progression-sensitive data until explicitly revealed.
