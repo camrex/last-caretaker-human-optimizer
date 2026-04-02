@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Last Caretaker — Human Optimizer</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="container">
+
+  <div class="app-header">
+    <div class="peco-status-strip" aria-hidden="true">
+      <span class="peco-status-left">SYSTEM: ONLINE</span>
+      <span class="peco-status-right">ID: Hall of Humanity</span>
+    </div>
+    <div class="peco-boot-line" aria-hidden="true">&gt; boot /optimizer --profile=humanity <span class="peco-cursor">_</span></div>
+    <div class="app-header-top">
+      <h1>The Last Caretaker — Human Optimizer</h1>
+      <div class="theme-picker-wrap">
+        <label for="theme-select">Theme</label>
+        <select id="theme-select" title="Select visual theme">
+          <option value="default">Default</option>
+          <option value="peco">PECO Terminal</option>
+        </select>
+      </div>
+    </div>
+    <p>Optimizes food + memories with Bio Flesh / Artifact exclusions and optional inventory limits</p>
+  </div>
+
+  <div class="tab-bar" aria-label="App sections">
+    <button type="button" class="tab-btn active" id="tab-btn-optimizer" data-tab="optimizer">Optimizer</button>
+    <button type="button" class="tab-btn" id="tab-btn-sandbox" data-tab="sandbox">Sandbox</button>
+    <button type="button" class="tab-btn" id="tab-btn-plan" data-tab="plan">Plan</button>
+    <button type="button" class="tab-btn" id="tab-btn-progress" data-tab="progress">Progress</button>
+    <button type="button" class="tab-btn" id="tab-btn-professions" data-tab="professions">Professions</button>
+    <button type="button" class="tab-btn" id="tab-btn-foods" data-tab="foods">Foods</button>
+    <button type="button" class="tab-btn" id="tab-btn-memories" data-tab="memories">Memories</button>
+    <button type="button" class="tab-btn" id="tab-btn-data" data-tab="data">Data</button>
+  </div>
+
+  <section id="tab-optimizer" class="tab-panel">
+    <!-- Profession selector -->
+    <div class="row2">
+      <div>
+        <label for="prof-mode">Selection mode</label>
+        <select id="prof-mode">
+          <option value="committee">Committee then profession</option>
+          <option value="direct">Direct profession selection</option>
+        </select>
+      </div>
+      <div id="committee-wrap"><label for="csel">Committee</label><select id="csel"></select></div>
+    </div>
+    <div class="row2">
+      <div id="committee-prof-wrap"><label for="psel">Profession</label><select id="psel"></select></div>
+      <div id="direct-prof-wrap" class="is-hidden"><label for="psel-all">Profession</label><select id="psel-all"></select></div>
+    </div>
+
+    <div class="section-label">Quick profession tracking</div>
+    <div class="inventory-actions">
+      <button type="button" class="mini-btn" id="prof-mark-created-btn">Mark selected as created</button>
+      <button type="button" class="mini-btn" id="prof-unmark-created-btn">Unmark selected</button>
+      <button type="button" class="mini-btn" id="prof-analyze-ash-btn">Recommend Ash Notebook professions</button>
+    </div>
+    <div class="options-row compact-row">
+      <label class="checkbox-inline" for="ash-allow-multi-prof">
+        <input type="checkbox" id="ash-allow-multi-prof" title="Allow more than one Ash Notebook per profession in recommendations">
+        <span>Allow multi-Ash recommendations per profession (override)</span>
+      </label>
+    </div>
+    <p class="muted inventory-note" id="created-prof-summary">Created professions: 0</p>
+
+    <!-- Trait display -->
+    <div id="trait-display"></div>
+
+    <!-- Baseline minimums -->
+    <div class="section-label">Baseline minimums</div>
+    <p class="baseline-note">
+      Raise these if you want a human with more Life Exp, Height, or Weight than the
+      profession requires. Food must still cover the full target.
+    </p>
+    <div class="slider-row">
+      <span class="slabel">Life Exp</span>
+      <input type="range" id="b-life" min="10" max="220" value="10" step="1" title="Life Exp baseline">
+      <span class="val" id="bl-val">10</span>
+    </div>
+    <div class="slider-row">
+      <span class="slabel">Height</span>
+      <input type="range" id="b-height" min="30" max="220" value="30" step="1" title="Height baseline">
+      <span class="val" id="bh-val">30</span>
+    </div>
+    <div class="slider-row">
+      <span class="slabel">Weight</span>
+      <input type="range" id="b-weight" min="20" max="200" value="20" step="1" title="Weight baseline">
+      <span class="val" id="bw-val">20</span>
+    </div>
+    <div id="baseline-warnings"></div>
+
+    <!-- Restrictions -->
+    <div class="section-label">Restrictions</div>
+    <div class="options-row">
+      <div class="toggle-wrap" id="bf-toggle">
+        <div class="toggle-track" id="bf-track"><div class="toggle-thumb"></div></div>
+        <span class="toggle-label">Exclude <strong>Bio Flesh</strong> foods (Angels / Sharks)</span>
+      </div>
+      <div class="excluded-chips" id="bf-chips"></div>
+    </div>
+    <div class="options-row">
+      <div class="toggle-wrap" id="art-toggle">
+        <div class="toggle-track" id="art-track"><div class="toggle-thumb"></div></div>
+        <span class="toggle-label">Exclude <strong>Artifact</strong> memories (Ash Notebook, Star Child Memory)</span>
+      </div>
+      <div class="excluded-chips" id="art-chips"></div>
+    </div>
+    <div class="options-row">
+      <div class="toggle-wrap" id="inv-toggle">
+        <div class="toggle-track" id="inv-track"><div class="toggle-thumb"></div></div>
+        <span class="toggle-label">Use stored inventory limits for optimization</span>
+      </div>
+    </div>
+    <div class="options-row">
+      <label class="checkbox-inline" for="opt-session-aware">
+        <input type="checkbox" id="opt-session-aware">
+        <span>Use session-aware inventory (reserve planned items from other sessions)</span>
+      </label>
+    </div>
+    <div id="opt-session-controls" class="row2 is-hidden">
+      <div>
+        <label for="opt-session-select">Session context</label>
+        <select id="opt-session-select"></select>
+      </div>
+      <div>
+        <label class="checkbox-inline" for="opt-session-no-deficit">
+          <input type="checkbox" id="opt-session-no-deficit">
+          <span>Prefer no-deficit feasible plan</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Run button -->
+    <button class="run-btn" id="run-btn">Calculate optimal food + memory plan</button>
+
+    <!-- Results -->
+    <div id="results"></div>
+  </section>
+
+  <section id="tab-sandbox" class="tab-panel is-hidden">
+    <div class="section-label">Sandbox mode</div>
+    <p class="muted inventory-note">Set any food and memory quantities to preview resulting traits and which professions could be satisfied.</p>
+
+    <div class="inventory-actions">
+      <button type="button" class="mini-btn" id="sandbox-clear-btn">Clear sandbox quantities</button>
+      <button type="button" class="mini-btn" id="sandbox-load-inventory-btn">Load from current inventory</button>
+      <button type="button" class="mini-btn" id="sandbox-calc-btn">Recalculate sandbox result</button>
+    </div>
+    <div class="options-row compact-row">
+      <label class="checkbox-inline" for="sandbox-hide-created">
+        <input type="checkbox" id="sandbox-hide-created">
+        <span>Hide professions marked as created in Sandbox results</span>
+      </label>
+    </div>
+
+    <div class="inventory-grid-wrap sandbox-grid-wrap">
+      <div>
+        <div class="inventory-subtitle">Sandbox food quantities</div>
+        <div id="sandbox-food-list" class="inventory-list sandbox-card-list"></div>
+      </div>
+      <div>
+        <div class="inventory-subtitle">Sandbox memory quantities</div>
+        <div class="inventory-actions">
+          <button type="button" class="mini-btn" id="sandbox-clear-filters-btn">Clear memory trait filters</button>
+        </div>
+        <div class="filter-chip-row" id="sandbox-memory-trait-filters"></div>
+        <div id="sandbox-memory-list" class="inventory-list sandbox-card-list"></div>
+      </div>
+    </div>
+
+    <div id="sandbox-results"></div>
+  </section>
+
+  <section id="tab-plan" class="tab-panel is-hidden">
+    <div class="section-label">Growth plan</div>
+    <p class="muted inventory-note">Create growth sessions (rounds), store planned humans from Optimizer or Sandbox, and track created/sent states. Each session supports up to 4 humans. Space flights are grouped in batches of up to 3.</p>
+
+    <div class="inventory-actions">
+      <button type="button" class="mini-btn" id="plan-add-session-btn">Add session</button>
+      <button type="button" class="mini-btn" id="plan-add-optimizer-btn">Add last Optimizer result</button>
+      <button type="button" class="mini-btn" id="plan-add-sandbox-btn">Add current Sandbox setup</button>
+    </div>
+
+    <div id="plan-summary"></div>
+    <div class="section-label">Space flights</div>
+    <div id="plan-flight-list"></div>
+
+    <div class="section-label">Sessions</div>
+    <div id="plan-session-list" class="stack-list"></div>
+  </section>
+
+  <section id="tab-progress" class="tab-panel is-hidden">
+    <div class="section-label">Progress overview</div>
+    <div id="progress-summary" class="summary-grid"></div>
+
+    <div class="section-label">Committee progress</div>
+    <p class="muted inventory-note">Track how close each committee is to completion based on created professions.</p>
+    <div id="committee-progress-list" class="stack-list"></div>
+
+    <div class="section-label">Profession tracker</div>
+    <p class="muted inventory-note">All professions are grouped by committee below so you can review overall progress without switching filters.</p>
+    <div class="row2 progress-filters progress-filters-single">
+      <div>
+        <label for="progress-status-filter">Status filter</label>
+        <select id="progress-status-filter">
+          <option value="all">All professions</option>
+          <option value="created">Created only</option>
+          <option value="planned">Planned only</option>
+          <option value="remaining">Remaining only</option>
+        </select>
+      </div>
+    </div>
+    <div id="profession-progress-list" class="stack-list"></div>
+  </section>
+
+  <section id="tab-professions" class="tab-panel is-hidden">
+    <div class="section-label">Profession reference</div>
+    <p class="muted inventory-note">Browse all profession trait requirements with quick filters for committee, tier, and created state.</p>
+
+    <div class="section-label">Committee filter</div>
+    <div id="ref-committee-filters" class="filter-chip-row"></div>
+
+    <div class="section-label">Tier filter</div>
+    <div id="ref-tier-filters" class="filter-chip-row"></div>
+
+    <div class="section-label">Status filter</div>
+    <div id="ref-status-filters" class="filter-chip-row"></div>
+
+    <div id="profession-reference-meta" class="muted inventory-note"></div>
+    <div id="profession-reference-list" class="reference-grid"></div>
+  </section>
+
+  <section id="tab-foods" class="tab-panel is-hidden">
+    <div class="section-label">Food reference</div>
+    <p class="muted inventory-note">Browse food outputs, recipe ingredients, and Bio Flesh requirements.</p>
+
+    <div class="section-label">Level filter</div>
+    <div id="food-level-filters" class="filter-chip-row"></div>
+
+    <div class="section-label">Recipe filter</div>
+    <div id="food-source-filters" class="filter-chip-row"></div>
+
+    <div id="food-reference-meta" class="muted inventory-note"></div>
+    <div id="food-reference-list" class="reference-grid"></div>
+
+    <div class="section-label">Food inventory</div>
+    <p class="muted inventory-note">Adjust food inventory directly on each food card.</p>
+  </section>
+
+  <section id="tab-memories" class="tab-panel is-hidden">
+    <div class="section-label">Memory reference</div>
+    <p class="muted inventory-note">Browse memory traits by rarity and artifact status.</p>
+
+    <div class="section-label">Rank filter</div>
+    <div id="memory-rank-filters" class="filter-chip-row"></div>
+
+    <div class="section-label">Type filter</div>
+    <div id="memory-type-filters" class="filter-chip-row"></div>
+
+    <div class="section-label">Trait filter</div>
+    <div id="memory-trait-filters" class="filter-chip-row"></div>
+
+    <div id="memory-reference-meta" class="muted inventory-note"></div>
+    <div id="memory-reference-list" class="reference-grid"></div>
+
+    <div class="section-label">Memory inventory</div>
+    <p class="muted inventory-note">Adjust memory inventory directly on each memory card.</p>
+  </section>
+
+  <section id="tab-data" class="tab-panel is-hidden">
+    <div class="section-label">Plan data (local only)</div>
+    <p class="muted inventory-note">Inventory, created professions, and planning settings are saved in your browser. Use export/import to back up or move between devices.</p>
+    <div class="inventory-actions">
+      <button type="button" class="mini-btn" id="inv-export-btn">Export planning JSON</button>
+      <button type="button" class="mini-btn" id="inv-import-btn">Import planning JSON</button>
+      <button type="button" class="mini-btn mini-btn-danger" id="inv-clear-btn">Reset inventory to zero</button>
+      <input type="file" id="inv-file-input" class="is-hidden" accept="application/json" title="Import planning JSON file">
+    </div>
+  </section>
+
+</div><!-- /container -->
+
+<!-- Data files — order matters -->
+<script src="data/bio.js"></script>
+<script src="data/foods.js"></script>
+<script src="data/memories.js"></script>
+<script src="data/professions.js"></script>
+<!-- Logic -->
+<script src="js/optimizer.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>
