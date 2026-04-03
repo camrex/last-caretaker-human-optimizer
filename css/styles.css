@@ -219,6 +219,24 @@ body.theme-peco .home-peco-console {
   padding: 1.5rem 1rem 3rem;
 }
 
+.build-label {
+  display: inline-block;
+  margin-top: 6px;
+  margin-bottom: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--text-sec);
+  background: var(--bg-secondary);
+}
+
+body.theme-peco .build-label {
+  border-color: rgba(27, 224, 102, 0.45);
+  color: #6affac;
+  background: rgba(6, 30, 14, 0.9);
+}
+
 .app-header { margin-bottom: 1.5rem; }
 .peco-status-strip,
 .peco-boot-line {

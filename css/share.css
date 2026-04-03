@@ -66,6 +66,18 @@ body.theme-peco {
   font-size: 14px;
 }
 
+.build-label {
+  display: inline-block;
+  margin-top: 6px;
+  margin-bottom: 8px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .actions {
   display: flex;
   gap: 8px;
