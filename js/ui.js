@@ -82,6 +82,8 @@ var planShareUiState = {
   allSessions: true,
   selectedSessionIds: {},
 };
+var shareModalMode = "plan";
+var itemIdMaps = null;
 
 // ─── Baseline helper ──────────────────────────────────────────────────────────
 
@@ -215,26 +217,84 @@ function cloneCountMap(raw) {
   return out;
 }
 
-function countMapToPairs(countMap) {
+function ensureItemIdMaps() {
+  if (itemIdMaps) return itemIdMaps;
+
+  itemIdMaps = {
+    foods: { nameToId: {}, idToName: {} },
+    memories: { nameToId: {}, idToName: {} },
+    professions: { nameToId: {}, idToName: {} },
+  };
+
+  FOODS.forEach(function(item) {
+    if (typeof item.id === "number" && item.id > 0) {
+      itemIdMaps.foods.nameToId[item.name] = item.id;
+      itemIdMaps.foods.idToName[item.id] = item.name;
+    }
+  });
+  MEMORIES.forEach(function(item) {
+    if (typeof item.id === "number" && item.id > 0) {
+      itemIdMaps.memories.nameToId[item.name] = item.id;
+      itemIdMaps.memories.idToName[item.id] = item.name;
+    }
+  });
+  PROFESSIONS.forEach(function(item) {
+    if (typeof item.id === "number" && item.id > 0) {
+      itemIdMaps.professions.nameToId[item.name] = item.id;
+      itemIdMaps.professions.idToName[item.id] = item.name;
+    }
+  });
+
+  return itemIdMaps;
+}
+
+function tokenForName(kind, name) {
+  var maps = ensureItemIdMaps();
+  var byName = maps[kind] && maps[kind].nameToId ? maps[kind].nameToId : {};
+  var id = byName[name];
+  return (typeof id === "number" && id > 0) ? id : name;
+}
+
+function nameForToken(kind, token) {
+  var maps = ensureItemIdMaps();
+  var byId = maps[kind] && maps[kind].idToName ? maps[kind].idToName : {};
+
+  if (typeof token === "number") {
+    return byId[token] || null;
+  }
+
+  if (typeof token === "string") {
+    var maybeId = parseInt(token, 10);
+    if (!isNaN(maybeId) && byId[maybeId]) return byId[maybeId];
+    return token;
+  }
+
+  return null;
+}
+
+function countMapToPairs(countMap, kind) {
   var out = [];
   Object.keys(countMap || {}).forEach(function(name) {
     var v = parseInt(countMap[name], 10);
-    if (!isNaN(v) && v > 0) out.push([name, v]);
+    if (!isNaN(v) && v > 0) out.push([tokenForName(kind, name), v]);
   });
   out.sort(function(a, b) {
-    if (a[0] < b[0]) return -1;
-    if (a[0] > b[0]) return 1;
+    var ak = String(a[0]);
+    var bk = String(b[0]);
+    if (ak < bk) return -1;
+    if (ak > bk) return 1;
     return 0;
   });
   return out;
 }
 
-function pairsToCountMap(pairs) {
+function pairsToCountMap(pairs, kind) {
   var out = {};
   if (!Array.isArray(pairs)) return out;
   pairs.forEach(function(pair) {
     if (!Array.isArray(pair) || pair.length < 2) return;
-    var name = String(pair[0] || "").trim();
+    var name = nameForToken(kind, pair[0]);
+    if (typeof name === "string") name = name.trim();
     var count = parseInt(pair[1], 10);
     if (!name || isNaN(count) || count <= 0) return;
     out[name] = count;
@@ -286,8 +346,8 @@ function compactPlanForShare(plan, selectedSessionIds) {
         human.label,
         human.source,
         human.professionName,
-        countMapToPairs(human.chosenFood),
-        countMapToPairs(human.chosenMem),
+        countMapToPairs(human.chosenFood, "foods"),
+        countMapToPairs(human.chosenMem, "memories"),
         human.created ? 1 : 0,
         human.sent ? 1 : 0,
         human.flightId || 0,
@@ -327,8 +387,8 @@ function expandSharedPlanPayload(payload) {
         label: String((row && row[2]) || "Planned human"),
         source: (row && row[3]) === "sandbox" ? "sandbox" : "optimizer",
         professionName: String((row && row[4]) || ""),
-        chosenFood: pairsToCountMap(row && row[5]),
-        chosenMem: pairsToCountMap(row && row[6]),
+        chosenFood: pairsToCountMap(row && row[5], "foods"),
+        chosenMem: pairsToCountMap(row && row[6], "memories"),
         created: !!(row && row[7]),
         sent: !!(row && row[8]),
         flightId: flightId,
@@ -386,19 +446,68 @@ function decodeSharePayload(raw) {
   }
 }
 
-function buildPlanShareUrl(selectedSessionIds) {
-  var compact = compactPlanForShare(appState.plan, selectedSessionIds);
-  var payload = { v: 1, p: compact, t: normalizeTheme(appState.theme) };
-  var encoded = encodeSharePayload(payload);
-  if (!encoded) return "";
-
+function getShareBaseUrl() {
   var base = "";
   try {
     base = new URL("share.html", window.location.href).toString().split("#")[0];
   } catch (err) {
     base = window.location.origin + window.location.pathname.replace(/[^/]*$/, "") + "share.html";
   }
-  return base + "#" + PLAN_SHARE_HASH_KEY + "=" + encoded;
+  return base;
+}
+
+function buildPlanSharePayload(selectedSessionIds) {
+  var compact = compactPlanForShare(appState.plan, selectedSessionIds);
+  return { v: 2, st: "plan", th: normalizeTheme(appState.theme), p: compact };
+}
+
+function buildInventorySharePayload() {
+  return {
+    v: 2,
+    st: "inventory",
+    th: normalizeTheme(appState.theme),
+    i: {
+      f: countMapToPairs(appState.inventory && appState.inventory.foods ? appState.inventory.foods : {}, "foods"),
+      m: countMapToPairs(appState.inventory && appState.inventory.memories ? appState.inventory.memories : {}, "memories"),
+    },
+  };
+}
+
+function buildProgressSharePayload() {
+  var created = [];
+  Object.keys(appState.createdProfessions || {}).forEach(function(name) {
+    if (appState.createdProfessions[name]) {
+      created.push(tokenForName("professions", name));
+    }
+  });
+  created.sort(function(a, b) {
+    var as = String(a), bs = String(b);
+    if (as < bs) return -1;
+    if (as > bs) return 1;
+    return 0;
+  });
+
+  return {
+    v: 2,
+    st: "progress",
+    th: normalizeTheme(appState.theme),
+    g: { c: created },
+  };
+}
+
+function buildShareUrlForMode(mode, selectedSessionIds) {
+  var payload = null;
+  if (mode === "inventory") payload = buildInventorySharePayload();
+  else if (mode === "progress") payload = buildProgressSharePayload();
+  else payload = buildPlanSharePayload(selectedSessionIds);
+
+  var encoded = encodeSharePayload(payload);
+  if (!encoded) return "";
+  return getShareBaseUrl() + "#" + PLAN_SHARE_HASH_KEY + "=" + encoded;
+}
+
+function buildPlanShareUrl(selectedSessionIds) {
+  return buildShareUrlForMode("plan", selectedSessionIds);
 }
 
 function readSharedPlanFromLocationHash() {
@@ -409,8 +518,16 @@ function readSharedPlanFromLocationHash() {
   if (!encoded) return null;
 
   var parsed = decodeSharePayload(encoded);
-  if (!parsed || parsed.v !== 1 || !parsed.p) return null;
-  return expandSharedPlanPayload(parsed.p);
+  if (!parsed) return null;
+
+  // Backward compatibility: legacy plan payload format.
+  if (parsed.v === 1 && parsed.p) return expandSharedPlanPayload(parsed.p);
+
+  if (parsed.v >= 2 && parsed.st === "plan" && parsed.p) {
+    return expandSharedPlanPayload(parsed.p);
+  }
+
+  return null;
 }
 
 function clearPlanShareHash() {
@@ -1431,7 +1548,7 @@ function getSuggestedSessionSubset(targetLength) {
   return picked;
 }
 
-function renderPlanShareQuality(url, selectedCount, totalCount, suggestions) {
+function renderPlanShareQuality(url, infoText, suggestions) {
   var target = el("plan-share-quality");
   if (!target) return;
 
@@ -1444,7 +1561,8 @@ function renderPlanShareQuality(url, selectedCount, totalCount, suggestions) {
   var quality = getShareQuality(url.length);
   target.className = (quality.level === "good" || quality.level === "ok") ? "info-box" : "warn-box";
   var h = "";
-  h += "Share size: " + url.length + " chars. " + quality.text + ". Sessions included: " + selectedCount + " / " + totalCount + ".";
+  h += "Share size: " + url.length + " chars. " + quality.text + ".";
+  if (infoText) h += " " + infoText;
   if (suggestions && suggestions.normal && suggestions.normal.ids && suggestions.normal.ids.length) {
     h += ' <button type="button" class="mini-btn" id="plan-share-apply-suggest-btn">Use balanced subset (' + suggestions.normal.ids.length + ' sessions)</button>';
   }
@@ -1508,10 +1626,13 @@ function updatePlanShareSessionControlsUI() {
 }
 
 function refreshPlanSharePreview() {
-  var selectedIds = getSelectedSessionIdsForShare();
+  var isPlanMode = shareModalMode === "plan";
+  var selectedIds = isPlanMode ? getSelectedSessionIdsForShare() : null;
   var sessions = (appState.plan && appState.plan.sessions) ? appState.plan.sessions : [];
   var selectedCount = selectedIds ? selectedIds.length : sessions.length;
-  var shareUrl = selectedIds && !selectedIds.length ? "" : buildPlanShareUrl(selectedIds);
+  var shareUrl = (isPlanMode && selectedIds && !selectedIds.length)
+    ? ""
+    : buildShareUrlForMode(shareModalMode, selectedIds);
   var input = el("plan-share-link-input");
   var openLink = el("plan-share-open-link");
 
@@ -1521,7 +1642,7 @@ function refreshPlanSharePreview() {
 
   var suggestions = null;
   var currentLength = shareUrl ? shareUrl.length : 0;
-  if (planShareUiState.allSessions && currentLength > 1200 && sessions.length > 1) {
+  if (isPlanMode && planShareUiState.allSessions && currentLength > 1200 && sessions.length > 1) {
     suggestions = {};
 
     if (currentLength > 2200) {
@@ -1541,7 +1662,12 @@ function refreshPlanSharePreview() {
     }
   }
 
-  renderPlanShareQuality(shareUrl, selectedCount, sessions.length, suggestions);
+  var infoText = isPlanMode
+    ? ("Sessions included: " + selectedCount + " / " + sessions.length + ".")
+    : (shareModalMode === "inventory"
+      ? "Snapshot type: inventory."
+      : "Snapshot type: created professions.");
+  renderPlanShareQuality(shareUrl, infoText, suggestions);
 }
 
 function renderPlanShareSessionPicker() {
@@ -1583,11 +1709,50 @@ function renderPlanShareSessionPicker() {
   refreshPlanSharePreview();
 }
 
+function setShareModalMode(mode) {
+  shareModalMode = (mode === "inventory" || mode === "progress") ? mode : "plan";
+
+  var title = el("plan-share-modal-title");
+  var note = el("plan-share-modal-note");
+  var optionsRow = el("plan-share-options-row");
+  var sessionList = el("plan-share-session-list");
+
+  if (shareModalMode === "plan") {
+    if (title) title.textContent = "Share Plan";
+    if (note) note.textContent = "Scan this QR code on mobile to open a read-only shared view of the plan.";
+    if (optionsRow) optionsRow.classList.remove("is-hidden");
+    if (sessionList) sessionList.classList.remove("is-hidden");
+    renderPlanShareSessionPicker();
+    return;
+  }
+
+  if (shareModalMode === "inventory") {
+    if (title) title.textContent = "Share Inventory";
+    if (note) note.textContent = "Scan this QR code on mobile to open a read-only inventory snapshot.";
+  } else {
+    if (title) title.textContent = "Share Created Professions";
+    if (note) note.textContent = "Scan this QR code on mobile to open a read-only created profession snapshot.";
+  }
+
+  if (optionsRow) optionsRow.classList.add("is-hidden");
+  if (sessionList) sessionList.classList.add("is-hidden");
+  refreshPlanSharePreview();
+}
+
 function openPlanShareModal() {
   var modal = el("plan-share-modal");
   if (!modal) return;
 
-  renderPlanShareSessionPicker();
+  setShareModalMode("plan");
+
+  modal.classList.remove("is-hidden");
+}
+
+function openDataShareModal(mode) {
+  var modal = el("plan-share-modal");
+  if (!modal) return;
+
+  setShareModalMode(mode);
 
   modal.classList.remove("is-hidden");
 }
@@ -3632,6 +3797,12 @@ function init() {
     addHumanPlanEntry("sandbox", lastSandboxSnapshot.label, lastSandboxSnapshot.professionName, lastSandboxSnapshot.chosenFood, lastSandboxSnapshot.chosenMem);
   });
   el("plan-share-btn").addEventListener("click", openPlanShareModal);
+  el("data-share-inventory-btn").addEventListener("click", function() {
+    openDataShareModal("inventory");
+  });
+  el("data-share-progress-btn").addEventListener("click", function() {
+    openDataShareModal("progress");
+  });
   el("plan-share-close-btn").addEventListener("click", closePlanShareModal);
   el("plan-share-all-sessions").addEventListener("change", function() {
     planShareUiState.allSessions = !!el("plan-share-all-sessions").checked;

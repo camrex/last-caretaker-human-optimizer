@@ -50,6 +50,7 @@ Notes:
 - You can share all sessions or selected sessions only.
 - QR size guidance is shown in-app (balanced and ultra-safe subset suggestions).
 - Shared page defaults to the sharer's theme, while viewers can still switch theme on mobile.
+- Data tab can generate QR snapshots for inventory-only or created-professions progress-only sharing.
 
 ## App Feature Map
 
@@ -62,6 +63,7 @@ Notes:
 - Foods: food reference and inventory editing.
 - Memories: memory reference and inventory editing.
 - Data: import/export profile JSON and reset inventory.
+- Data: import/export profile JSON, reset inventory, and generate inventory/progress QR snapshots.
 
 ## Architecture Overview
 
@@ -104,11 +106,15 @@ Import/export JSON is provided in the Data tab for portability.
 
 ### Share model
 
-Plan sharing uses compressed URL hash payloads:
+Sharing uses compressed URL hash payloads:
 
 - No backend persistence
 - Read-only mobile rendering by default
 - Optional import into local planner state from the shared snapshot
+- Supports typed snapshots:
+    - `plan` (sessions/flights/humans)
+    - `inventory` (current food + memory quantities)
+    - `progress` (created professions)
 
 ## Running Locally
 
@@ -157,6 +163,7 @@ Commands:
 Pipeline output:
 
 - Regenerates `data/foods.js`, `data/memories.js`, `data/professions.js` in sparse format (non-zero numeric fields only).
+- Emits stable numeric IDs for foods/memories/professions and persists name->id mapping in `resource/item_ids.json` for compact share encoding.
 - Leaves `data/bio.js` manually maintained.
 
 ## Repository Structure

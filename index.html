@@ -364,6 +364,13 @@ DATA
       <button type="button" class="mini-btn mini-btn-danger" id="inv-clear-btn">Reset inventory to zero</button>
       <input type="file" id="inv-file-input" class="is-hidden" accept="application/json" title="Import planning JSON file">
     </div>
+
+    <div class="section-label">Mobile share snapshots</div>
+    <p class="muted inventory-note">Generate QR links for phone-friendly read-only snapshots of inventory or created profession progress.</p>
+    <div class="inventory-actions">
+      <button type="button" class="mini-btn" id="data-share-inventory-btn">Share inventory via QR</button>
+      <button type="button" class="mini-btn" id="data-share-progress-btn">Share created professions via QR</button>
+    </div>
   </section>
 
 </div><!-- /container -->
@@ -374,8 +381,8 @@ DATA
       <h2 id="plan-share-modal-title">Share Plan</h2>
       <button type="button" class="mini-btn" id="plan-share-close-btn">Close</button>
     </div>
-    <p class="muted inventory-note">Scan this QR code on mobile to open a read-only shared view of the plan.</p>
-    <div class="options-row compact-row">
+    <p class="muted inventory-note" id="plan-share-modal-note">Scan this QR code on mobile to open a read-only shared view of the plan.</p>
+    <div class="options-row compact-row" id="plan-share-options-row">
       <label class="checkbox-inline" for="plan-share-all-sessions">
         <input type="checkbox" id="plan-share-all-sessions" checked>
         <span>Share all sessions</span>

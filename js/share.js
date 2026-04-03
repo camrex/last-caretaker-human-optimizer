@@ -1,6 +1,7 @@
 (function() {
   var HASH_KEY = "share-plan";
   var SHARE_THEME_STORAGE_KEY = "tlc-share-theme-v1";
+  var itemIdMaps = null;
 
   function el(id) { return document.getElementById(id); }
   function escapeHtml(text) {
@@ -13,11 +14,82 @@
   }
 
   function countMapFromPairs(pairs) {
+    return countMapFromPairsByKind(pairs, "foods");
+  }
+
+  function namesFromTokensByKind(tokens, kind) {
+    if (!Array.isArray(tokens)) return [];
+    var seen = {};
+    var out = [];
+    tokens.forEach(function(token) {
+      var name = nameForToken(kind, token);
+      if (typeof name === "string") name = name.trim();
+      if (!name || seen[name]) return;
+      seen[name] = 1;
+      out.push(name);
+    });
+    out.sort(function(a, b) { return a.localeCompare(b); });
+    return out;
+  }
+
+  function ensureItemIdMaps() {
+    if (itemIdMaps) return itemIdMaps;
+
+    itemIdMaps = {
+      foods: { idToName: {} },
+      memories: { idToName: {} },
+      professions: { idToName: {} },
+    };
+
+    if (typeof FOODS !== "undefined" && Array.isArray(FOODS)) {
+      FOODS.forEach(function(item) {
+        if (typeof item.id === "number" && item.id > 0) {
+          itemIdMaps.foods.idToName[item.id] = item.name;
+        }
+      });
+    }
+    if (typeof MEMORIES !== "undefined" && Array.isArray(MEMORIES)) {
+      MEMORIES.forEach(function(item) {
+        if (typeof item.id === "number" && item.id > 0) {
+          itemIdMaps.memories.idToName[item.id] = item.name;
+        }
+      });
+    }
+    if (typeof PROFESSIONS !== "undefined" && Array.isArray(PROFESSIONS)) {
+      PROFESSIONS.forEach(function(item) {
+        if (typeof item.id === "number" && item.id > 0) {
+          itemIdMaps.professions.idToName[item.id] = item.name;
+        }
+      });
+    }
+
+    return itemIdMaps;
+  }
+
+  function nameForToken(kind, token) {
+    var maps = ensureItemIdMaps();
+    var byId = maps[kind] && maps[kind].idToName ? maps[kind].idToName : {};
+
+    if (typeof token === "number") {
+      return byId[token] || null;
+    }
+
+    if (typeof token === "string") {
+      var maybeId = parseInt(token, 10);
+      if (!isNaN(maybeId) && byId[maybeId]) return byId[maybeId];
+      return token;
+    }
+
+    return null;
+  }
+
+  function countMapFromPairsByKind(pairs, kind) {
     var out = {};
     if (!Array.isArray(pairs)) return out;
     pairs.forEach(function(pair) {
       if (!Array.isArray(pair) || pair.length < 2) return;
-      var k = String(pair[0] || "").trim();
+      var k = nameForToken(kind, pair[0]);
+      if (typeof k === "string") k = k.trim();
       var v = parseInt(pair[1], 10);
       if (!k || isNaN(v) || v <= 0) return;
       out[k] = v;
@@ -133,8 +205,8 @@
           label: String((row && row[2]) || "Planned human"),
           source: (row && row[3]) === "sandbox" ? "sandbox" : "optimizer",
           professionName: String((row && row[4]) || ""),
-          chosenFood: countMapFromPairs(row && row[5]),
-          chosenMem: countMapFromPairs(row && row[6]),
+          chosenFood: countMapFromPairsByKind(row && row[5], "foods"),
+          chosenMem: countMapFromPairsByKind(row && row[6], "memories"),
           created: !!(row && row[7]),
           sent: !!(row && row[8]),
           flightId: flightId,
@@ -154,6 +226,21 @@
     };
 
     return normalizePlan(rawPlan);
+  }
+
+  function expandInventoryPayload(payload) {
+    if (!payload || typeof payload !== "object") return { foods: {}, memories: {} };
+    return {
+      foods: countMapFromPairsByKind(payload.f, "foods"),
+      memories: countMapFromPairsByKind(payload.m, "memories"),
+    };
+  }
+
+  function expandProgressPayload(payload) {
+    if (!payload || typeof payload !== "object") return { created: [] };
+    return {
+      created: namesFromTokensByKind(payload.c, "professions"),
+    };
   }
 
   function decodePayload(raw) {
@@ -184,7 +271,7 @@
     }
   }
 
-  function readPlanFromHash() {
+  function readSharedStateFromHash() {
     var hash = String(window.location.hash || "");
     var prefix = "#" + HASH_KEY + "=";
     if (hash.indexOf(prefix) !== 0) return null;
@@ -193,11 +280,43 @@
     if (!encoded) return null;
 
     var parsed = decodePayload(encoded);
-    if (!parsed || parsed.v !== 1 || !parsed.p) return null;
-    return {
-      plan: expandPayload(parsed.p),
-      sharedTheme: normalizeTheme(parsed.t),
-    };
+    if (!parsed) return null;
+
+    // Backward compatibility: legacy plan payload format.
+    if (parsed.v === 1 && parsed.p) {
+      return {
+        type: "plan",
+        plan: expandPayload(parsed.p),
+        sharedTheme: normalizeTheme(parsed.t),
+      };
+    }
+
+    if (parsed.v >= 2) {
+      var st = parsed.st || "plan";
+      if (st === "inventory") {
+        return {
+          type: "inventory",
+          inventory: expandInventoryPayload(parsed.i),
+          sharedTheme: normalizeTheme(parsed.th),
+        };
+      }
+      if (st === "progress") {
+        return {
+          type: "progress",
+          progress: expandProgressPayload(parsed.g),
+          sharedTheme: normalizeTheme(parsed.th),
+        };
+      }
+      if (st === "plan" && parsed.p) {
+        return {
+          type: "plan",
+          plan: expandPayload(parsed.p),
+          sharedTheme: normalizeTheme(parsed.th),
+        };
+      }
+    }
+
+    return null;
   }
 
   function formatPills(countMap) {
@@ -219,7 +338,10 @@
     var flights = el("flights");
     var sessionsWrap = el("sessions");
 
+    var type = state && state.type ? state.type : "plan";
     var plan = state && state.plan ? state.plan : null;
+    var inventory = state && state.inventory ? state.inventory : null;
+    var progress = state && state.progress ? state.progress : null;
     var sharedTheme = state ? normalizeTheme(state.sharedTheme) : "default";
 
     var savedTheme = loadThemeChoice();
@@ -234,6 +356,67 @@
         applyTheme(next);
         saveThemeChoice(next);
       });
+    }
+
+    if (!state) {
+      status.innerHTML = '<div class="warn">No valid shared plan payload found in this URL.</div>';
+      summary.innerHTML = "";
+      flights.innerHTML = "";
+      sessionsWrap.innerHTML = "";
+      return;
+    }
+
+    if (type === "inventory") {
+      var foods = inventory && inventory.foods ? inventory.foods : {};
+      var memories = inventory && inventory.memories ? inventory.memories : {};
+      var foodKeys = Object.keys(foods).filter(function(k) { return (foods[k] || 0) > 0; });
+      var memKeys = Object.keys(memories).filter(function(k) { return (memories[k] || 0) > 0; });
+      var foodTotal = foodKeys.reduce(function(sum, k) { return sum + (foods[k] || 0); }, 0);
+      var memTotal = memKeys.reduce(function(sum, k) { return sum + (memories[k] || 0); }, 0);
+
+      status.innerHTML = '<div class="ok">Loaded read-only inventory snapshot.</div>';
+
+      summary.innerHTML = ''
+        + '<div class="title">Inventory Summary</div>'
+        + '<div class="grid">'
+        + '<div class="metric"><div class="k">Food entries</div><div class="v">' + foodKeys.length + '</div></div>'
+        + '<div class="metric"><div class="k">Memory entries</div><div class="v">' + memKeys.length + '</div></div>'
+        + '<div class="metric"><div class="k">Total units</div><div class="v">' + (foodTotal + memTotal) + '</div></div>'
+        + '</div>';
+
+      flights.innerHTML = '<div class="title">Food Inventory</div>' + (foodKeys.length
+        ? '<div class="pills">' + foodKeys.sort().map(function(name) {
+          return '<span class="pill">' + escapeHtml(name) + ' x' + foods[name] + '</span>';
+        }).join('') + '</div>'
+        : '<div class="meta">No non-zero food entries.</div>');
+
+      sessionsWrap.innerHTML = '<section class="card"><div class="title">Memory Inventory</div>' + (memKeys.length
+        ? '<div class="pills">' + memKeys.sort().map(function(name) {
+          return '<span class="pill">' + escapeHtml(name) + ' x' + memories[name] + '</span>';
+        }).join('') + '</div>'
+        : '<div class="meta">No non-zero memory entries.</div>') + '</section>';
+
+      return;
+    }
+
+    if (type === "progress") {
+      var created = progress && Array.isArray(progress.created) ? progress.created : [];
+      status.innerHTML = '<div class="ok">Loaded read-only created profession snapshot.</div>';
+
+      summary.innerHTML = ''
+        + '<div class="title">Created Profession Summary</div>'
+        + '<div class="grid">'
+        + '<div class="metric"><div class="k">Created professions</div><div class="v">' + created.length + '</div></div>'
+        + '<div class="metric"><div class="k">Snapshot type</div><div class="v">Progress</div></div>'
+        + '<div class="metric"><div class="k">Read-only</div><div class="v">Yes</div></div>'
+        + '</div>';
+
+      flights.innerHTML = '<div class="title">Created professions</div>' + (created.length
+        ? '<div class="pills">' + created.map(function(name) { return '<span class="pill">' + escapeHtml(name) + '</span>'; }).join('') + '</div>'
+        : '<div class="meta">No created professions in this snapshot.</div>');
+
+      sessionsWrap.innerHTML = '';
+      return;
     }
 
     if (!plan) {
@@ -306,5 +489,5 @@
     }).join("");
   }
 
-  render(readPlanFromHash());
+  render(readSharedStateFromHash());
 })();

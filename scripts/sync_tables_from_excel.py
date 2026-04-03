@@ -21,6 +21,7 @@ WORKBOOK_PATH = ROOT / "resource" / "The Last Caretaker - Human Needs.xlsx"
 FOODS_PATH = ROOT / "data" / "foods.js"
 MEMORIES_PATH = ROOT / "data" / "memories.js"
 PROFESSIONS_PATH = ROOT / "data" / "professions.js"
+ITEM_IDS_PATH = ROOT / "resource" / "item_ids.json"
 
 FOOD_NUMERIC_KEYS = [
     "lifeExp",
@@ -97,6 +98,57 @@ def time_to_text(v: Any) -> str:
 
 def js_quote(v: Any) -> str:
     return json.dumps(v, ensure_ascii=True)
+
+
+def load_item_ids_registry() -> dict[str, dict[str, int]]:
+    if not ITEM_IDS_PATH.exists():
+        return {"foods": {}, "memories": {}, "professions": {}}
+
+    raw = json.loads(ITEM_IDS_PATH.read_text(encoding="utf-8"))
+    out = {"foods": {}, "memories": {}, "professions": {}}
+    for key in out:
+        src = raw.get(key, {}) if isinstance(raw, dict) else {}
+        if not isinstance(src, dict):
+            continue
+        for name, ident in src.items():
+            try:
+                n = int(ident)
+            except Exception:
+                continue
+            if n > 0:
+                out[key][str(name)] = n
+    return out
+
+
+def assign_stable_ids(items: list[dict[str, Any]], kind: str, registry: dict[str, dict[str, int]]) -> bool:
+    mapping = registry.setdefault(kind, {})
+    existing_ids = {int(v) for v in mapping.values() if isinstance(v, int) and v > 0}
+    next_id = (max(existing_ids) + 1) if existing_ids else 1
+    changed = False
+
+    for item in items:
+        name = str(item.get("name") or "").strip()
+        if not name:
+            continue
+        if name in mapping:
+            item["id"] = int(mapping[name])
+            continue
+        mapping[name] = next_id
+        item["id"] = next_id
+        next_id += 1
+        changed = True
+
+    return changed
+
+
+def render_item_ids_registry(registry: dict[str, dict[str, int]]) -> str:
+    clean: dict[str, dict[str, int]] = {}
+    for key in ["foods", "memories", "professions"]:
+        clean[key] = dict(sorted(
+            ((name, int(ident)) for name, ident in registry.get(key, {}).items()),
+            key=lambda pair: pair[1]
+        ))
+    return json.dumps(clean, indent=2, ensure_ascii=True) + "\n"
 
 
 def parse_foods(wb: openpyxl.Workbook) -> list[dict[str, Any]]:
@@ -226,7 +278,7 @@ def render_foods(foods: list[dict[str, Any]]) -> str:
         "var FOODS = [",
     ]
     for i, item in enumerate(foods):
-        text = "  " + render_sparse_object(item, ["name", "rank", "craftTime", "level"], FOOD_NUMERIC_KEYS)
+        text = "  " + render_sparse_object(item, ["id", "name", "rank", "craftTime", "level"], FOOD_NUMERIC_KEYS)
         if i < len(foods) - 1:
             text += ","
         lines.append(text)
@@ -251,7 +303,7 @@ def render_memories(memories: list[dict[str, Any]]) -> str:
         "var MEMORIES = [",
     ]
     for i, item in enumerate(memories):
-        text = "  " + render_sparse_object(item, ["name", "rank"], MEMORY_NUMERIC_KEYS)
+        text = "  " + render_sparse_object(item, ["id", "name", "rank"], MEMORY_NUMERIC_KEYS)
         if i < len(memories) - 1:
             text += ","
         lines.append(text)
@@ -274,7 +326,7 @@ def render_professions(professions: list[dict[str, Any]]) -> str:
         "var PROFESSIONS = [",
     ]
     for i, item in enumerate(professions):
-        text = "  " + render_sparse_object(item, ["name", "tier", "committee"], PROF_NUMERIC_KEYS)
+        text = "  " + render_sparse_object(item, ["id", "name", "tier", "committee"], PROF_NUMERIC_KEYS)
         if i < len(professions) - 1:
             text += ","
         lines.append(text)
@@ -301,11 +353,18 @@ def main() -> int:
     foods = parse_foods(wb)
     memories = parse_memories(wb)
     professions = parse_professions(wb)
+    item_ids = load_item_ids_registry()
+
+    # IDs are persisted in resource/item_ids.json so links remain stable over time.
+    assign_stable_ids(foods, "foods", item_ids)
+    assign_stable_ids(memories, "memories", item_ids)
+    assign_stable_ids(professions, "professions", item_ids)
 
     rendered = {
         FOODS_PATH: render_foods(foods),
         MEMORIES_PATH: render_memories(memories),
         PROFESSIONS_PATH: render_professions(professions),
+        ITEM_IDS_PATH: render_item_ids_registry(item_ids),
     }
 
     if args.write:
