@@ -99,6 +99,21 @@ Bio-stuff is farmed and processed into food ingredients at approximately 1:1
 - Use **Share plan via QR** in the Plan tab to generate a compressed URL hash for read-only plan viewing on another device. Shared links open a dedicated mobile-focused page (`share.html`) instead of the full app, defaulting to the sharer's selected theme while still allowing the mobile viewer to switch themes. You can share all sessions or only selected sessions, and a built-in size indicator helps estimate QR scan reliability. Shared links do not overwrite local data unless you explicitly import.
 - No server-side storage is used.
 
+### Second-screen workflow (PC + phone)
+
+If you play in fullscreen and do not want to alt-tab to the planner:
+
+1. Build or update your plan on PC in the app.
+2. Open the **Plan** tab and click **Share plan via QR**.
+3. Scan the QR code with your phone.
+4. Keep the mobile `share.html` page open as a read-only companion while you play.
+
+Notes:
+
+- The shared mobile page is optimized for quick viewing and does not modify local PC data.
+- The shared link includes the current app theme by default, and mobile viewers can still switch themes.
+- Use session-only sharing if you want smaller QR codes for easier scanning.
+
 ### Tabs
 
 - **Home:** overview, spoiler warning, project notice, and PECO-theme easter egg terminal screen.
