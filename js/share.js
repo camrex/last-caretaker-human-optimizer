@@ -373,6 +373,18 @@
       return;
     }
 
+    // Preserve the current shared hash when jumping to the full app.
+    var openFullAppLink = el("open-full-app");
+    if (openFullAppLink) {
+      try {
+        var fullAppUrl = new URL("index.html", window.location.href);
+        fullAppUrl.hash = window.location.hash;
+        openFullAppLink.href = fullAppUrl.toString();
+      } catch (err) {
+        openFullAppLink.href = "index.html" + (window.location.hash || "");
+      }
+    }
+
     if (type === "inventory") {
       var foods = inventory && inventory.foods ? inventory.foods : {};
       var memories = inventory && inventory.memories ? inventory.memories : {};
@@ -435,10 +447,6 @@
     }
 
     status.innerHTML = '<div class="ok">Loaded shared plan snapshot. This page is read-only.</div>';
-
-    var fullAppUrl = new URL("index.html", window.location.href);
-    fullAppUrl.hash = window.location.hash;
-    el("open-full-app").href = fullAppUrl.toString();
 
     summary.innerHTML = ''
       + '<div class="title">Summary</div>'
