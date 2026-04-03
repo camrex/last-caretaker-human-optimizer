@@ -388,11 +388,16 @@ function decodeSharePayload(raw) {
 
 function buildPlanShareUrl(selectedSessionIds) {
   var compact = compactPlanForShare(appState.plan, selectedSessionIds);
-  var payload = { v: 1, p: compact };
+  var payload = { v: 1, p: compact, t: normalizeTheme(appState.theme) };
   var encoded = encodeSharePayload(payload);
   if (!encoded) return "";
 
-  var base = window.location.origin + window.location.pathname + window.location.search;
+  var base = "";
+  try {
+    base = new URL("share.html", window.location.href).toString().split("#")[0];
+  } catch (err) {
+    base = window.location.origin + window.location.pathname.replace(/[^/]*$/, "") + "share.html";
+  }
   return base + "#" + PLAN_SHARE_HASH_KEY + "=" + encoded;
 }
 

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shared Plan - The Last Caretaker Optimizer</title>
+  <link rel="stylesheet" href="css/share.css">
+</head>
+<body>
+  <main class="wrap">
+    <header class="head">
+      <h1>Shared Plan Snapshot</h1>
+      <p class="sub">Read-only mobile view generated from a shared link.</p>
+      <div class="theme-row">
+        <label for="share-theme-select">Theme</label>
+        <select id="share-theme-select" aria-label="Choose share page theme">
+          <option value="default">Default</option>
+          <option value="peco">PECO Terminal</option>
+        </select>
+      </div>
+      <div class="actions">
+        <a id="open-full-app" class="btn" href="index.html">Open full app</a>
+      </div>
+    </header>
+
+    <div id="status"></div>
+    <section id="summary" class="card"></section>
+    <section id="flights" class="card"></section>
+    <section id="sessions" class="stack"></section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
+  <script src="js/share.js"></script>
+</body>
+</html>

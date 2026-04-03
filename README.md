@@ -96,7 +96,7 @@ Bio-stuff is farmed and processed into food ingredients at approximately 1:1
 - Use the **Progress** tab to mark professions as created and track committee completion.
 - The **Optimizer** tab still includes quick mark/unmark actions for the currently selected profession.
 - Use **Export planning JSON** / **Import planning JSON** to back up and restore profile state, including profession selection/mode, baseline sliders, toggles, inventory mode, theme, inventory counts, created professions, and plan/session/rocket data.
-- Use **Share plan via QR** in the Plan tab to generate a compressed URL hash for read-only plan viewing on another device. You can share all sessions or only selected sessions, and a built-in size indicator helps estimate QR scan reliability. Shared links do not overwrite local data unless you explicitly import.
+- Use **Share plan via QR** in the Plan tab to generate a compressed URL hash for read-only plan viewing on another device. Shared links open a dedicated mobile-focused page (`share.html`) instead of the full app, defaulting to the sharer's selected theme while still allowing the mobile viewer to switch themes. You can share all sessions or only selected sessions, and a built-in size indicator helps estimate QR scan reliability. Shared links do not overwrite local data unless you explicitly import.
 - No server-side storage is used.
 
 ### Tabs
