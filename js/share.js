@@ -45,7 +45,9 @@
 
   function loadThemeChoice() {
     try {
-      return normalizeTheme(localStorage.getItem(SHARE_THEME_STORAGE_KEY));
+      var raw = localStorage.getItem(SHARE_THEME_STORAGE_KEY);
+      if (raw !== "default" && raw !== "peco") return null;
+      return raw;
     } catch (err) {
       return null;
     }
