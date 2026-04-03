@@ -378,10 +378,26 @@
     if (openFullAppLink) {
       try {
         var fullAppUrl = new URL("index.html", window.location.href);
-        fullAppUrl.hash = window.location.hash;
+        var rawHash = String(window.location.hash || "");
+        var prefix = "#" + HASH_KEY + "=";
+        fullAppUrl.hash = rawHash;
+        if (rawHash.indexOf(prefix) === 0) {
+          var encoded = rawHash.slice(prefix.length);
+          if (encoded) fullAppUrl.searchParams.set(HASH_KEY, encoded);
+        }
         openFullAppLink.href = fullAppUrl.toString();
       } catch (err) {
-        openFullAppLink.href = "index.html" + (window.location.hash || "");
+        var fallbackHash = String(window.location.hash || "");
+        var fallbackUrl = "index.html";
+        if (fallbackHash) {
+          var prefix2 = "#" + HASH_KEY + "=";
+          if (fallbackHash.indexOf(prefix2) === 0) {
+            var encoded2 = fallbackHash.slice(prefix2.length);
+            if (encoded2) fallbackUrl += "?" + HASH_KEY + "=" + encoded2;
+          }
+          fallbackUrl += fallbackHash;
+        }
+        openFullAppLink.href = fallbackUrl;
       }
     }
 

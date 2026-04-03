@@ -2005,7 +2005,8 @@ function refreshReferenceViews() {
 
 function getPlannedProfessionCounts() {
   var counts = {};
-  var humans = (appState.plan && Array.isArray(appState.plan.humans)) ? appState.plan.humans : [];
+  var sourcePlan = sharedPlanState ? normalizePlan(sharedPlanState) : normalizePlan(appState.plan);
+  var humans = (sourcePlan && Array.isArray(sourcePlan.humans)) ? sourcePlan.humans : [];
   humans.forEach(function(h) {
     if (h.sent) return;
     var name = String(h.professionName || "").trim();

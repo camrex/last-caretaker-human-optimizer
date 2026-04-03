@@ -325,6 +325,25 @@ function buildPlanShareUrl(selectedSessionIds) {
   return buildShareUrlForMode("plan", selectedSessionIds);
 }
 
+function readEncodedSharedPayloadFromLocation() {
+  var hash = String(window.location.hash || "");
+  var prefix = "#" + PLAN_SHARE_HASH_KEY + "=";
+  if (hash.indexOf(prefix) === 0) {
+    var fromHash = hash.slice(prefix.length);
+    if (fromHash) return fromHash;
+  }
+
+  try {
+    var params = new URLSearchParams(window.location.search || "");
+    var fromQuery = params.get(PLAN_SHARE_HASH_KEY);
+    if (fromQuery) return fromQuery;
+  } catch (err) {
+    // Ignore malformed query string.
+  }
+
+  return "";
+}
+
 function expandInventoryPayload(payload) {
   if (!payload || typeof payload !== "object") return { foods: {}, memories: {} };
   return {
@@ -348,10 +367,7 @@ function expandProgressPayload(payload) {
 }
 
 function readSharedStateFromLocationHash() {
-  var hash = String(window.location.hash || "");
-  var prefix = "#" + PLAN_SHARE_HASH_KEY + "=";
-  if (hash.indexOf(prefix) !== 0) return null;
-  var encoded = hash.slice(prefix.length);
+  var encoded = readEncodedSharedPayloadFromLocation();
   if (!encoded) return null;
 
   var parsed = decodeSharePayload(encoded);
@@ -377,7 +393,16 @@ function readSharedPlanFromLocationHash() {
 }
 
 function clearPlanShareHash() {
-  if (!window.location.hash) return;
-  var noHashUrl = window.location.pathname + window.location.search;
-  window.history.replaceState(null, "", noHashUrl);
+  if (!window.location.hash && !window.location.search) return;
+  var cleanSearch = "";
+  try {
+    var params = new URLSearchParams(window.location.search || "");
+    params.delete(PLAN_SHARE_HASH_KEY);
+    var asString = params.toString();
+    cleanSearch = asString ? ("?" + asString) : "";
+  } catch (err) {
+    cleanSearch = "";
+  }
+  var cleanedUrl = window.location.pathname + cleanSearch;
+  window.history.replaceState(null, "", cleanedUrl);
 }
