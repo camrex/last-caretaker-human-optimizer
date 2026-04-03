@@ -144,6 +144,11 @@ body.theme-peco {
   padding: 8px;
 }
 
+body.theme-peco .metric {
+  background: rgba(6, 30, 14, 0.92);
+  border-color: rgba(65, 255, 147, 0.28);
+}
+
 .metric .k {
   color: var(--muted);
   font-size: 11px;
