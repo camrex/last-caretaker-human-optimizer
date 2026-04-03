@@ -2008,7 +2008,6 @@ function getPlannedProfessionCounts() {
   var sourcePlan = sharedPlanState ? normalizePlan(sharedPlanState) : normalizePlan(appState.plan);
   var humans = (sourcePlan && Array.isArray(sourcePlan.humans)) ? sourcePlan.humans : [];
   humans.forEach(function(h) {
-    if (h.sent) return;
     var name = String(h.professionName || "").trim();
     if (!name) return;
     if (!getProf(name)) return;
@@ -3035,9 +3034,13 @@ function applyIncomingSharedStateToLocal(sharedState) {
   if (!sharedState || !sharedState.type) return "";
 
   if (sharedState.type === "plan") {
-    sharedPlanState = sharedState.plan || null;
-    sharedPlanSourceUrl = sharedPlanState ? window.location.href : "";
-    return "";
+    sharedPlanState = null;
+    sharedPlanSourceUrl = "";
+    appState.plan = normalizePlan(sharedState.plan);
+    appState.activeTab = "plan";
+    clearPlanShareHash();
+    saveProfile();
+    return "Imported shared plan snapshot into local plan data.";
   }
 
   sharedPlanState = null;
