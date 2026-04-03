@@ -25,6 +25,7 @@
         </select>
       </div>
     </div>
+    <div class="build-label" id="build-label" aria-label="Build version"></div>
     <p>Optimizes food + memories with Bio Flesh / Artifact exclusions and optional inventory limits</p>
   </div>
 
@@ -370,6 +371,7 @@ DATA
     <div class="inventory-actions">
       <button type="button" class="mini-btn" id="data-share-inventory-btn">Share inventory via QR</button>
       <button type="button" class="mini-btn" id="data-share-progress-btn">Share created professions via QR</button>
+      <button type="button" class="mini-btn" id="data-share-all-btn">Experimental: share all via QR</button>
     </div>
   </section>
 
@@ -413,6 +415,7 @@ DATA
 <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
 <!-- Logic -->
+<script src="js/build_info.js"></script>
 <script src="js/optimizer.js"></script>
 <script src="js/share_codec.js"></script>
 <script src="js/plan_state.js"></script>

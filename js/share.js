@@ -314,6 +314,15 @@
           sharedTheme: normalizeTheme(parsed.th),
         };
       }
+      if (st === "all" && parsed.p && parsed.i && parsed.g) {
+        return {
+          type: "all",
+          plan: expandPayload(parsed.p),
+          inventory: expandInventoryPayload(parsed.i),
+          progress: expandProgressPayload(parsed.g),
+          sharedTheme: normalizeTheme(parsed.th),
+        };
+      }
       if (st === "plan" && parsed.p) {
         return {
           type: "plan",
@@ -449,6 +458,32 @@
       flights.innerHTML = '<div class="title">Created professions</div>' + (created.length
         ? '<div class="pills">' + created.map(function(name) { return '<span class="pill">' + escapeHtml(name) + '</span>'; }).join('') + '</div>'
         : '<div class="meta">No created professions in this snapshot.</div>');
+
+      sessionsWrap.innerHTML = '';
+      return;
+    }
+
+    if (type === "all") {
+      var aPlan = plan || normalizePlan({});
+      var aInventory = inventory || { foods: {}, memories: {} };
+      var aProgress = progress && Array.isArray(progress.created) ? progress.created : [];
+      var foodCount = Object.keys(aInventory.foods || {}).filter(function(k) { return (aInventory.foods[k] || 0) > 0; }).length;
+      var memCount = Object.keys(aInventory.memories || {}).filter(function(k) { return (aInventory.memories[k] || 0) > 0; }).length;
+
+      status.innerHTML = '<div class="ok">Loaded experimental all-in-one snapshot.</div>';
+      summary.innerHTML = ''
+        + '<div class="title">All-in-one Summary</div>'
+        + '<div class="grid">'
+        + '<div class="metric"><div class="k">Plan humans</div><div class="v">' + aPlan.humans.length + '</div></div>'
+        + '<div class="metric"><div class="k">Inventory entries</div><div class="v">' + (foodCount + memCount) + '</div></div>'
+        + '<div class="metric"><div class="k">Created professions</div><div class="v">' + aProgress.length + '</div></div>'
+        + '</div>';
+
+      flights.innerHTML = ''
+        + '<div class="title">Included Data</div>'
+        + '<div class="meta">Plan: ' + aPlan.sessions.length + ' sessions, ' + aPlan.flights.length + ' rockets.</div>'
+        + '<div class="meta">Inventory: ' + foodCount + ' food entries, ' + memCount + ' memory entries.</div>'
+        + '<div class="meta">Progress: ' + aProgress.length + ' created professions.</div>';
 
       sessionsWrap.innerHTML = '';
       return;

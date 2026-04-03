@@ -310,10 +310,38 @@ function buildProgressSharePayload() {
   };
 }
 
+function buildAllSharePayload(selectedSessionIds) {
+  var planPart = compactPlanForShare(appState.plan, selectedSessionIds);
+  var inventoryPart = {
+    f: countMapToPairs(appState.inventory && appState.inventory.foods ? appState.inventory.foods : {}, "foods"),
+    m: countMapToPairs(appState.inventory && appState.inventory.memories ? appState.inventory.memories : {}, "memories"),
+  };
+  var created = [];
+  Object.keys(appState.createdProfessions || {}).forEach(function(name) {
+    if (appState.createdProfessions[name]) created.push(tokenForName("professions", name));
+  });
+  created.sort(function(a, b) {
+    var as = String(a), bs = String(b);
+    if (as < bs) return -1;
+    if (as > bs) return 1;
+    return 0;
+  });
+
+  return {
+    v: 3,
+    st: "all",
+    th: normalizeTheme(appState.theme),
+    p: planPart,
+    i: inventoryPart,
+    g: { c: created },
+  };
+}
+
 function buildShareUrlForMode(mode, selectedSessionIds) {
   var payload = null;
   if (mode === "inventory") payload = buildInventorySharePayload();
   else if (mode === "progress") payload = buildProgressSharePayload();
+  else if (mode === "all") payload = buildAllSharePayload(selectedSessionIds);
   else payload = buildPlanSharePayload(selectedSessionIds);
 
   var encoded = encodeSharePayload(payload);
@@ -381,6 +409,14 @@ function readSharedStateFromLocationHash() {
   }
   if (parsed.st === "progress" && parsed.g) {
     return { type: "progress", progress: expandProgressPayload(parsed.g) };
+  }
+  if (parsed.st === "all" && parsed.p && parsed.i && parsed.g) {
+    return {
+      type: "all",
+      plan: expandSharedPlanPayload(parsed.p),
+      inventory: expandInventoryPayload(parsed.i),
+      progress: expandProgressPayload(parsed.g),
+    };
   }
 
   return null;

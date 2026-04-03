@@ -1032,6 +1032,7 @@ function updatePlanShareSessionControlsUI() {
 
 function refreshPlanSharePreview() {
   var isPlanMode = shareModalMode === "plan";
+  var isAllMode = shareModalMode === "all";
   var selectedIds = isPlanMode ? getSelectedSessionIdsForShare() : null;
   var sessions = (appState.plan && appState.plan.sessions) ? appState.plan.sessions : [];
   var selectedCount = selectedIds ? selectedIds.length : sessions.length;
@@ -1071,7 +1072,10 @@ function refreshPlanSharePreview() {
     ? ("Sessions included: " + selectedCount + " / " + sessions.length + ".")
     : (shareModalMode === "inventory"
       ? "Snapshot type: inventory."
-      : "Snapshot type: created professions.");
+      : (shareModalMode === "progress"
+        ? "Snapshot type: created professions."
+        : "Snapshot type: ALL (plan + inventory + created professions), experimental."));
+  if (isAllMode) suggestions = null;
   renderPlanShareQuality(shareUrl, infoText, suggestions);
 }
 
@@ -1115,7 +1119,7 @@ function renderPlanShareSessionPicker() {
 }
 
 function setShareModalMode(mode) {
-  shareModalMode = (mode === "inventory" || mode === "progress") ? mode : "plan";
+  shareModalMode = (mode === "inventory" || mode === "progress" || mode === "all") ? mode : "plan";
 
   var title = el("plan-share-modal-title");
   var note = el("plan-share-modal-note");
@@ -1134,9 +1138,12 @@ function setShareModalMode(mode) {
   if (shareModalMode === "inventory") {
     if (title) title.textContent = "Share Inventory";
     if (note) note.textContent = "Scan this QR code on mobile to open a read-only inventory snapshot.";
-  } else {
+  } else if (shareModalMode === "progress") {
     if (title) title.textContent = "Share Created Professions";
     if (note) note.textContent = "Scan this QR code on mobile to open a read-only created profession snapshot.";
+  } else {
+    if (title) title.textContent = "Share All (Experimental)";
+    if (note) note.textContent = "Scan this QR code on mobile to open a read-only snapshot that includes plan, inventory, and created professions.";
   }
 
   if (optionsRow) optionsRow.classList.add("is-hidden");
@@ -3063,6 +3070,17 @@ function applyIncomingSharedStateToLocal(sharedState) {
     return "Imported shared created-profession snapshot into local progress data.";
   }
 
+  if (sharedState.type === "all") {
+    appState.plan = normalizePlan(sharedState.plan);
+    appState.inventory = normalizeInventory(sharedState.inventory);
+    var createdAll = sharedState.progress && sharedState.progress.created ? sharedState.progress.created : {};
+    appState.createdProfessions = normalizeCreatedProfessions(createdAll);
+    appState.activeTab = "progress";
+    clearPlanShareHash();
+    saveProfile();
+    return "Imported shared all-in-one snapshot into local plan, inventory, and progress data.";
+  }
+
   return "";
 }
 
@@ -3242,6 +3260,9 @@ function init() {
   });
   el("data-share-progress-btn").addEventListener("click", function() {
     openDataShareModal("progress");
+  });
+  el("data-share-all-btn").addEventListener("click", function() {
+    openDataShareModal("all");
   });
   el("plan-share-close-btn").addEventListener("click", closePlanShareModal);
   el("plan-share-all-sessions").addEventListener("change", function() {
