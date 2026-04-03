@@ -3030,6 +3030,38 @@ function runOptimize() {
   renderSessionAwareMode(useFeasible ? "feasible" : "ideal");
 }
 
+function applyIncomingSharedStateToLocal(sharedState) {
+  if (!sharedState || !sharedState.type) return "";
+
+  if (sharedState.type === "plan") {
+    sharedPlanState = sharedState.plan || null;
+    sharedPlanSourceUrl = sharedPlanState ? window.location.href : "";
+    return "";
+  }
+
+  sharedPlanState = null;
+  sharedPlanSourceUrl = "";
+
+  if (sharedState.type === "inventory") {
+    appState.inventory = normalizeInventory(sharedState.inventory);
+    appState.activeTab = "foods";
+    clearPlanShareHash();
+    saveProfile();
+    return "Imported shared inventory snapshot into local inventory.";
+  }
+
+  if (sharedState.type === "progress") {
+    var createdMap = sharedState.progress && sharedState.progress.created ? sharedState.progress.created : {};
+    appState.createdProfessions = normalizeCreatedProfessions(createdMap);
+    appState.activeTab = "progress";
+    clearPlanShareHash();
+    saveProfile();
+    return "Imported shared created-profession snapshot into local progress data.";
+  }
+
+  return "";
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 function init() {
@@ -3091,8 +3123,7 @@ function init() {
   appState.theme = normalizeTheme(profile.theme);
   applyTheme(appState.theme);
 
-  sharedPlanState = readSharedPlanFromLocationHash();
-  sharedPlanSourceUrl = sharedPlanState ? window.location.href : "";
+  var startupSharedNotice = applyIncomingSharedStateToLocal(readSharedStateFromLocationHash());
 
   el("theme-select").value = appState.theme;
   el("theme-select").addEventListener("change", function() {
@@ -3263,9 +3294,21 @@ function init() {
   setActiveTab(appState.activeTab || "optimizer");
   populateProfs();
 
+  if (startupSharedNotice) {
+    setHTML("results", '<div class="info-box">' + escapeHtml(startupSharedNotice) + '</div>');
+  }
+
   window.addEventListener("hashchange", function() {
-    sharedPlanState = readSharedPlanFromLocationHash();
-    sharedPlanSourceUrl = sharedPlanState ? window.location.href : "";
+    var sharedNotice = applyIncomingSharedStateToLocal(readSharedStateFromLocationHash());
+    if (sharedNotice) {
+      renderInventoryEditors();
+      renderSandboxEditors();
+      renderSandboxResults();
+      refreshProgressViews();
+      refreshReferenceViews();
+      setActiveTab(appState.activeTab || "optimizer");
+      setHTML("results", '<div class="info-box">' + escapeHtml(sharedNotice) + '</div>');
+    }
     renderPlanTab();
   });
 }

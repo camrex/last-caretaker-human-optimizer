@@ -325,7 +325,29 @@ function buildPlanShareUrl(selectedSessionIds) {
   return buildShareUrlForMode("plan", selectedSessionIds);
 }
 
-function readSharedPlanFromLocationHash() {
+function expandInventoryPayload(payload) {
+  if (!payload || typeof payload !== "object") return { foods: {}, memories: {} };
+  return {
+    foods: pairsToCountMap(payload.f, "foods"),
+    memories: pairsToCountMap(payload.m, "memories"),
+  };
+}
+
+function expandProgressPayload(payload) {
+  var created = {};
+  if (!payload || typeof payload !== "object" || !Array.isArray(payload.c)) {
+    return { created: created };
+  }
+  payload.c.forEach(function(token) {
+    var name = nameForToken("professions", token);
+    if (typeof name === "string" && name.trim()) {
+      created[name] = true;
+    }
+  });
+  return { created: created };
+}
+
+function readSharedStateFromLocationHash() {
   var hash = String(window.location.hash || "");
   var prefix = "#" + PLAN_SHARE_HASH_KEY + "=";
   if (hash.indexOf(prefix) !== 0) return null;
@@ -333,13 +355,25 @@ function readSharedPlanFromLocationHash() {
   if (!encoded) return null;
 
   var parsed = decodeSharePayload(encoded);
-  if (!parsed) return null;
+  if (!parsed || parsed.v !== 3) return null;
 
-  if (parsed.v === 3 && parsed.st === "plan" && parsed.p) {
-    return expandSharedPlanPayload(parsed.p);
+  if (parsed.st === "plan" && parsed.p) {
+    return { type: "plan", plan: expandSharedPlanPayload(parsed.p) };
+  }
+  if (parsed.st === "inventory" && parsed.i) {
+    return { type: "inventory", inventory: expandInventoryPayload(parsed.i) };
+  }
+  if (parsed.st === "progress" && parsed.g) {
+    return { type: "progress", progress: expandProgressPayload(parsed.g) };
   }
 
   return null;
+}
+
+function readSharedPlanFromLocationHash() {
+  var shared = readSharedStateFromLocationHash();
+  if (!shared || shared.type !== "plan") return null;
+  return shared.plan;
 }
 
 function clearPlanShareHash() {
