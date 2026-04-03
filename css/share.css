@@ -203,6 +203,12 @@ body.theme-peco {
   font-size: 11px;
 }
 
+body.theme-peco .pill {
+  background: rgba(7, 34, 16, 0.95);
+  color: #7affb1;
+  border-color: rgba(65, 255, 147, 0.45);
+}
+
 @media (max-width: 620px) {
   .grid { grid-template-columns: 1fr; }
 }
