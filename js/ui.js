@@ -75,6 +75,13 @@ var referenceState = {
 var resultNotice = "";
 var lastOptimizerResult = null;
 var lastSandboxSnapshot = null;
+var PLAN_SHARE_HASH_KEY = "share-plan";
+var sharedPlanState = null;
+var sharedPlanSourceUrl = "";
+var planShareUiState = {
+  allSessions: true,
+  selectedSessionIds: {},
+};
 
 // ─── Baseline helper ──────────────────────────────────────────────────────────
 
@@ -206,6 +213,205 @@ function cloneCountMap(raw) {
     if (!isNaN(v) && v > 0) out[k] = v;
   });
   return out;
+}
+
+function countMapToPairs(countMap) {
+  var out = [];
+  Object.keys(countMap || {}).forEach(function(name) {
+    var v = parseInt(countMap[name], 10);
+    if (!isNaN(v) && v > 0) out.push([name, v]);
+  });
+  out.sort(function(a, b) {
+    if (a[0] < b[0]) return -1;
+    if (a[0] > b[0]) return 1;
+    return 0;
+  });
+  return out;
+}
+
+function pairsToCountMap(pairs) {
+  var out = {};
+  if (!Array.isArray(pairs)) return out;
+  pairs.forEach(function(pair) {
+    if (!Array.isArray(pair) || pair.length < 2) return;
+    var name = String(pair[0] || "").trim();
+    var count = parseInt(pair[1], 10);
+    if (!name || isNaN(count) || count <= 0) return;
+    out[name] = count;
+  });
+  return out;
+}
+
+function compactPlanForShare(plan, selectedSessionIds) {
+  var normalized = normalizePlan(plan);
+  var selectedSet = null;
+
+  if (Array.isArray(selectedSessionIds) && selectedSessionIds.length) {
+    selectedSet = {};
+    selectedSessionIds.forEach(function(id) {
+      var n = parseInt(id, 10);
+      if (!isNaN(n) && n > 0) selectedSet[n] = 1;
+    });
+  }
+
+  var sessions = selectedSet
+    ? normalized.sessions.filter(function(session) { return !!selectedSet[session.id]; })
+    : normalized.sessions.slice();
+  var validSession = {};
+  sessions.forEach(function(session) { validSession[session.id] = 1; });
+
+  var humans = selectedSet
+    ? normalized.humans.filter(function(human) { return !!validSession[human.sessionId]; })
+    : normalized.humans.slice();
+  var validHuman = {};
+  humans.forEach(function(human) { validHuman[human.id] = 1; });
+
+  var flights = normalized.flights.map(function(flight) {
+    return {
+      id: flight.id,
+      humanIds: (flight.humanIds || []).filter(function(humanId) { return !!validHuman[humanId]; }).slice(0, 3),
+    };
+  }).filter(function(flight) {
+    return flight.humanIds.length > 0;
+  });
+
+  return {
+    s: sessions.map(function(session) {
+      return [session.id, session.name];
+    }),
+    h: humans.map(function(human) {
+      return [
+        human.id,
+        human.sessionId,
+        human.label,
+        human.source,
+        human.professionName,
+        countMapToPairs(human.chosenFood),
+        countMapToPairs(human.chosenMem),
+        human.created ? 1 : 0,
+        human.sent ? 1 : 0,
+        human.flightId || 0,
+      ];
+    }),
+    f: flights.map(function(flight) {
+      return [flight.id, (flight.humanIds || []).slice(0, 3)];
+    }),
+    ns: sessions.reduce(function(m, s) { return Math.max(m, s.id); }, 0) + 1,
+    nh: humans.reduce(function(m, h) { return Math.max(m, h.id); }, 0) + 1,
+    nf: flights.reduce(function(m, f) { return Math.max(m, f.id); }, 0) + 1,
+  };
+}
+
+function expandSharedPlanPayload(payload) {
+  if (!payload || typeof payload !== "object") return null;
+
+  var rawPlan = {
+    sessions: Array.isArray(payload.s) ? payload.s.map(function(row, idx) {
+      var id = parseInt(row && row[0], 10);
+      if (isNaN(id) || id <= 0) id = idx + 1;
+      return {
+        id: id,
+        name: String((row && row[1]) || ("Session " + id)),
+      };
+    }) : [],
+    humans: Array.isArray(payload.h) ? payload.h.map(function(row, idx) {
+      var id = parseInt(row && row[0], 10);
+      if (isNaN(id) || id <= 0) id = idx + 1;
+      var sessionId = parseInt(row && row[1], 10);
+      if (isNaN(sessionId) || sessionId <= 0) sessionId = 1;
+      var flightId = parseInt(row && row[9], 10);
+      if (isNaN(flightId) || flightId <= 0) flightId = null;
+      return {
+        id: id,
+        sessionId: sessionId,
+        label: String((row && row[2]) || "Planned human"),
+        source: (row && row[3]) === "sandbox" ? "sandbox" : "optimizer",
+        professionName: String((row && row[4]) || ""),
+        chosenFood: pairsToCountMap(row && row[5]),
+        chosenMem: pairsToCountMap(row && row[6]),
+        created: !!(row && row[7]),
+        sent: !!(row && row[8]),
+        flightId: flightId,
+      };
+    }) : [],
+    flights: Array.isArray(payload.f) ? payload.f.map(function(row, idx) {
+      var id = parseInt(row && row[0], 10);
+      if (isNaN(id) || id <= 0) id = idx + 1;
+      var humanIds = Array.isArray(row && row[1])
+        ? row[1].map(function(v) { return parseInt(v, 10); }).filter(function(v) { return !isNaN(v) && v > 0; }).slice(0, 3)
+        : [];
+      return { id: id, humanIds: humanIds };
+    }) : [],
+    nextSessionId: parseInt(payload.ns, 10),
+    nextHumanId: parseInt(payload.nh, 10),
+    nextFlightId: parseInt(payload.nf, 10),
+  };
+
+  return normalizePlan(rawPlan);
+}
+
+function encodeSharePayload(payload) {
+  var json = JSON.stringify(payload);
+  if (typeof LZString !== "undefined" && LZString && typeof LZString.compressToEncodedURIComponent === "function") {
+    return LZString.compressToEncodedURIComponent(json);
+  }
+  return encodeURIComponent(json);
+}
+
+function decodeSharePayload(raw) {
+  if (!raw) return null;
+  var json = null;
+
+  if (typeof LZString !== "undefined" && LZString && typeof LZString.decompressFromEncodedURIComponent === "function") {
+    try {
+      json = LZString.decompressFromEncodedURIComponent(raw);
+    } catch (err) {
+      json = null;
+    }
+  }
+
+  if (!json) {
+    try {
+      json = decodeURIComponent(raw);
+    } catch (err2) {
+      json = null;
+    }
+  }
+
+  if (!json) return null;
+  try {
+    return JSON.parse(json);
+  } catch (err3) {
+    return null;
+  }
+}
+
+function buildPlanShareUrl(selectedSessionIds) {
+  var compact = compactPlanForShare(appState.plan, selectedSessionIds);
+  var payload = { v: 1, p: compact };
+  var encoded = encodeSharePayload(payload);
+  if (!encoded) return "";
+
+  var base = window.location.origin + window.location.pathname + window.location.search;
+  return base + "#" + PLAN_SHARE_HASH_KEY + "=" + encoded;
+}
+
+function readSharedPlanFromLocationHash() {
+  var hash = String(window.location.hash || "");
+  var prefix = "#" + PLAN_SHARE_HASH_KEY + "=";
+  if (hash.indexOf(prefix) !== 0) return null;
+  var encoded = hash.slice(prefix.length);
+  if (!encoded) return null;
+
+  var parsed = decodeSharePayload(encoded);
+  if (!parsed || parsed.v !== 1 || !parsed.p) return null;
+  return expandSharedPlanPayload(parsed.p);
+}
+
+function clearPlanShareHash() {
+  if (!window.location.hash) return;
+  var noHashUrl = window.location.pathname + window.location.search;
+  window.history.replaceState(null, "", noHashUrl);
 }
 
 function normalizePlan(raw) {
@@ -1130,6 +1336,375 @@ function getShortageRowsForUsage(usage) {
   return rows;
 }
 
+function copyTextToClipboard(text, onDone) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function() {
+      if (onDone) onDone(true);
+    }).catch(function() {
+      if (onDone) onDone(false);
+    });
+    return;
+  }
+
+  var temp = document.createElement("textarea");
+  temp.value = text;
+  temp.setAttribute("readonly", "readonly");
+  temp.style.position = "fixed";
+  temp.style.left = "-9999px";
+  document.body.appendChild(temp);
+  temp.select();
+  var ok = false;
+  try {
+    ok = document.execCommand("copy");
+  } catch (err) {
+    ok = false;
+  }
+  document.body.removeChild(temp);
+  if (onDone) onDone(ok);
+}
+
+function renderPlanShareQr(url) {
+  var target = el("plan-share-qr");
+  if (!target) return;
+
+  if (!url) {
+    target.innerHTML = '<div class="warn-box">Could not generate share link.</div>';
+    return;
+  }
+
+  if (typeof qrcode !== "function") {
+    target.innerHTML = '<div class="warn-box">QR generator unavailable. Copy the share link instead.</div>';
+    return;
+  }
+
+  try {
+    var qr = qrcode(0, "M");
+    qr.addData(url);
+    qr.make();
+    target.innerHTML = qr.createImgTag(5, 8, "Shared plan QR code");
+  } catch (err) {
+    target.innerHTML = '<div class="warn-box">Could not render QR code. Copy the share link instead.</div>';
+  }
+}
+
+function getShareQuality(length) {
+  if (length <= 1200) return { level: "good", text: "Excellent scan reliability" };
+  if (length <= 2200) return { level: "ok", text: "Good scan reliability" };
+  if (length <= 3200) return { level: "warn", text: "May be hard to scan on some phones" };
+  return { level: "bad", text: "High risk of scan failure" };
+}
+
+function getSessionIdsSortedForShare() {
+  var sessions = (appState.plan && appState.plan.sessions) ? appState.plan.sessions.slice() : [];
+  sessions.sort(function(a, b) {
+    var countA = countHumansInSession(a.id);
+    var countB = countHumansInSession(b.id);
+    if (countB !== countA) return countB - countA;
+    return a.id - b.id;
+  });
+  return sessions.map(function(session) { return session.id; });
+}
+
+function getSuggestedSessionSubset(targetLength) {
+  var ids = getSessionIdsSortedForShare();
+  if (!ids.length) return [];
+
+  var picked = [];
+  for (var i = 0; i < ids.length; i++) {
+    var next = picked.concat(ids[i]);
+    var nextUrl = buildPlanShareUrl(next);
+    if (nextUrl && nextUrl.length <= targetLength) {
+      picked = next;
+      continue;
+    }
+    if (!picked.length) {
+      picked = [ids[i]];
+    }
+    break;
+  }
+
+  return picked;
+}
+
+function renderPlanShareQuality(url, selectedCount, totalCount, suggestions) {
+  var target = el("plan-share-quality");
+  if (!target) return;
+
+  if (!url) {
+    target.className = "warn-box";
+    target.textContent = "Select at least one session to generate a share link.";
+    return;
+  }
+
+  var quality = getShareQuality(url.length);
+  target.className = (quality.level === "good" || quality.level === "ok") ? "info-box" : "warn-box";
+  var h = "";
+  h += "Share size: " + url.length + " chars. " + quality.text + ". Sessions included: " + selectedCount + " / " + totalCount + ".";
+  if (suggestions && suggestions.normal && suggestions.normal.ids && suggestions.normal.ids.length) {
+    h += ' <button type="button" class="mini-btn" id="plan-share-apply-suggest-btn">Use balanced subset (' + suggestions.normal.ids.length + ' sessions)</button>';
+  }
+  if (suggestions && suggestions.safe && suggestions.safe.ids && suggestions.safe.ids.length) {
+    h += ' <button type="button" class="mini-btn" id="plan-share-apply-safe-suggest-btn">Use ultra-safe subset (' + suggestions.safe.ids.length + ' sessions)</button>';
+  }
+  target.innerHTML = h;
+
+  var applyBtn = el("plan-share-apply-suggest-btn");
+  if (applyBtn && suggestions && suggestions.normal && suggestions.normal.ids) {
+    applyBtn.addEventListener("click", function() {
+      planShareUiState.allSessions = false;
+      (appState.plan.sessions || []).forEach(function(session) {
+        planShareUiState.selectedSessionIds[session.id] = suggestions.normal.ids.indexOf(session.id) >= 0;
+      });
+      renderPlanShareSessionPicker();
+    });
+  }
+
+  var applySafeBtn = el("plan-share-apply-safe-suggest-btn");
+  if (applySafeBtn && suggestions && suggestions.safe && suggestions.safe.ids) {
+    applySafeBtn.addEventListener("click", function() {
+      planShareUiState.allSessions = false;
+      (appState.plan.sessions || []).forEach(function(session) {
+        planShareUiState.selectedSessionIds[session.id] = suggestions.safe.ids.indexOf(session.id) >= 0;
+      });
+      renderPlanShareSessionPicker();
+    });
+  }
+}
+
+function syncPlanShareSelectionState() {
+  appState.plan = normalizePlan(appState.plan);
+  var valid = {};
+  (appState.plan.sessions || []).forEach(function(session) {
+    valid[session.id] = 1;
+    if (typeof planShareUiState.selectedSessionIds[session.id] !== "boolean") {
+      planShareUiState.selectedSessionIds[session.id] = true;
+    }
+  });
+  Object.keys(planShareUiState.selectedSessionIds).forEach(function(id) {
+    if (!valid[id]) delete planShareUiState.selectedSessionIds[id];
+  });
+}
+
+function getSelectedSessionIdsForShare() {
+  syncPlanShareSelectionState();
+  if (planShareUiState.allSessions) return null;
+  return Object.keys(planShareUiState.selectedSessionIds)
+    .filter(function(id) { return !!planShareUiState.selectedSessionIds[id]; })
+    .map(function(id) { return parseInt(id, 10); })
+    .filter(function(id) { return !isNaN(id) && id > 0; });
+}
+
+function updatePlanShareSessionControlsUI() {
+  var list = el("plan-share-session-list");
+  var actions = el("plan-share-session-actions");
+  if (!list || !actions) return;
+  list.classList.toggle("is-hidden", !!planShareUiState.allSessions);
+  actions.classList.toggle("is-hidden", !!planShareUiState.allSessions);
+}
+
+function refreshPlanSharePreview() {
+  var selectedIds = getSelectedSessionIdsForShare();
+  var sessions = (appState.plan && appState.plan.sessions) ? appState.plan.sessions : [];
+  var selectedCount = selectedIds ? selectedIds.length : sessions.length;
+  var shareUrl = selectedIds && !selectedIds.length ? "" : buildPlanShareUrl(selectedIds);
+  var input = el("plan-share-link-input");
+  var openLink = el("plan-share-open-link");
+
+  if (input) input.value = shareUrl;
+  if (openLink) openLink.href = shareUrl || "#";
+  renderPlanShareQr(shareUrl);
+
+  var suggestions = null;
+  var currentLength = shareUrl ? shareUrl.length : 0;
+  if (planShareUiState.allSessions && currentLength > 1200 && sessions.length > 1) {
+    suggestions = {};
+
+    if (currentLength > 2200) {
+      var suggestedIds = getSuggestedSessionSubset(2200);
+      if (suggestedIds.length && suggestedIds.length < sessions.length) {
+        suggestions.normal = { ids: suggestedIds };
+      }
+    }
+
+    var safeSuggestedIds = getSuggestedSessionSubset(1200);
+    if (safeSuggestedIds.length && safeSuggestedIds.length < sessions.length) {
+      suggestions.safe = { ids: safeSuggestedIds };
+    }
+
+    if ((!suggestions.normal || !suggestions.normal.ids || !suggestions.normal.ids.length) && (!suggestions.safe || !suggestions.safe.ids || !suggestions.safe.ids.length)) {
+      suggestions = null;
+    }
+  }
+
+  renderPlanShareQuality(shareUrl, selectedCount, sessions.length, suggestions);
+}
+
+function renderPlanShareSessionPicker() {
+  syncPlanShareSelectionState();
+  var sessions = (appState.plan && appState.plan.sessions) ? appState.plan.sessions.slice() : [];
+  sessions.sort(function(a, b) { return a.id - b.id; });
+
+  var list = el("plan-share-session-list");
+  var allCb = el("plan-share-all-sessions");
+  if (!list || !allCb) return;
+
+  allCb.checked = !!planShareUiState.allSessions;
+  if (!sessions.length) {
+    list.innerHTML = '<div class="warn-box">No sessions available to share.</div>';
+    updatePlanShareSessionControlsUI();
+    refreshPlanSharePreview();
+    return;
+  }
+
+  list.innerHTML = sessions.map(function(session) {
+    var checked = !!planShareUiState.selectedSessionIds[session.id];
+    var count = countHumansInSession(session.id);
+    return '<label class="checkbox-inline share-session-row" for="plan-share-session-' + session.id + '">'
+      + '<input type="checkbox" id="plan-share-session-' + session.id + '" class="plan-share-session-cb" data-session-id="' + session.id + '"' + (checked ? ' checked' : '') + '>'
+      + '<span>' + escapeHtml(session.name) + ' (' + count + ' planned)</span>'
+      + '</label>';
+  }).join("");
+
+  Array.prototype.forEach.call(document.querySelectorAll('.plan-share-session-cb'), function(node) {
+    node.addEventListener("change", function() {
+      var sessionId = parseInt(node.getAttribute("data-session-id"), 10);
+      if (isNaN(sessionId)) return;
+      planShareUiState.selectedSessionIds[sessionId] = !!node.checked;
+      refreshPlanSharePreview();
+    });
+  });
+
+  updatePlanShareSessionControlsUI();
+  refreshPlanSharePreview();
+}
+
+function openPlanShareModal() {
+  var modal = el("plan-share-modal");
+  if (!modal) return;
+
+  renderPlanShareSessionPicker();
+
+  modal.classList.remove("is-hidden");
+}
+
+function closePlanShareModal() {
+  var modal = el("plan-share-modal");
+  if (!modal) return;
+  modal.classList.add("is-hidden");
+}
+
+function importSharedPlanToLocal() {
+  if (!sharedPlanState) return;
+  if (!window.confirm("Replace local plan data with this shared plan snapshot?")) return;
+  appState.plan = normalizePlan(sharedPlanState);
+  saveProfile();
+  renderPlanTab();
+  refreshProgressViews();
+  setHTML("results", '<div class="info-box">Imported shared plan into local plan data.</div>');
+}
+
+function dismissSharedPlanView() {
+  sharedPlanState = null;
+  sharedPlanSourceUrl = "";
+  clearPlanShareHash();
+  renderPlanTab();
+}
+
+function renderSharedPlanReadOnly() {
+  var wrap = el("plan-shared-view");
+  if (!wrap) return;
+
+  if (!sharedPlanState) {
+    wrap.innerHTML = "";
+    return;
+  }
+
+  var plan = normalizePlan(sharedPlanState);
+  var humanById = {};
+  (plan.humans || []).forEach(function(h) { humanById[h.id] = h; });
+
+  var h = '';
+  h += '<div class="section-label">Shared plan snapshot (read-only)</div>';
+  h += '<div class="score-grid">';
+  h += '<div class="sc"><div class="sl">Sessions</div><div class="sv">' + plan.sessions.length + '</div></div>';
+  h += '<div class="sc"><div class="sl">Planned humans</div><div class="sv">' + plan.humans.length + '</div></div>';
+  h += '<div class="sc"><div class="sl">Rockets</div><div class="sv">' + plan.flights.length + '</div></div>';
+  h += '</div>';
+
+  if (plan.flights.length) {
+    h += '<div class="section-label">Shared rockets</div>';
+    plan.flights.slice().sort(function(a, b) { return a.id - b.id; }).forEach(function(flight) {
+      var names = (flight.humanIds || []).map(function(id) {
+        var human = humanById[id];
+        return human ? escapeHtml(human.label) : ("#" + id);
+      }).join(', ');
+      h += '<div class="info-box">Rocket ' + flight.id + ' (' + (flight.humanIds || []).length + '/3): ' + (names || 'Empty') + '</div>';
+    });
+  }
+
+  h += '<div class="section-label">Shared sessions</div>';
+  plan.sessions.slice().sort(function(a, b) { return a.id - b.id; }).forEach(function(session) {
+    var humans = (plan.humans || []).filter(function(human) { return human.sessionId === session.id; });
+    humans.sort(function(a, b) { return a.id - b.id; });
+
+    h += '<article class="reference-card">';
+    h += '<div class="reference-card-header">';
+    h += '<div><div class="reference-card-title">' + escapeHtml(session.name) + '</div>';
+    h += '<div class="reference-card-meta">' + humans.length + ' / 4 planned</div></div>';
+    h += '</div>';
+
+    if (!humans.length) {
+      h += '<div class="muted-inline">No planned humans in this shared session.</div>';
+    } else {
+      humans.forEach(function(human) {
+        var foodTotal = Object.keys(human.chosenFood || {}).reduce(function(sum, k) { return sum + (human.chosenFood[k] || 0); }, 0);
+        var memTotal = Object.keys(human.chosenMem || {}).reduce(function(sum, k) { return sum + (human.chosenMem[k] || 0); }, 0);
+        h += '<div class="plan-human-row">';
+        h += '<div class="plan-human-main">';
+        h += '<div class="fname">' + escapeHtml(human.label) + '</div>';
+        h += '<div class="fsub">Source: ' + (human.source === 'sandbox' ? 'Sandbox' : 'Optimizer') + (human.professionName ? (' • Profession: ' + escapeHtml(human.professionName)) : '') + '</div>';
+        h += '<div class="fsub">Food items: ' + foodTotal + ' • Memory items: ' + memTotal + '</div>';
+        h += '<div class="fsub plan-loadout-label">Food assignment</div>';
+        h += formatPlanLoadoutPills(human.chosenFood, 'foods');
+        h += '<div class="fsub plan-loadout-label">Memory assignment</div>';
+        h += formatPlanLoadoutPills(human.chosenMem, 'memories');
+        h += '<div class="fsub">Status: ' + (human.sent ? 'Sent to space' : (human.created ? 'Created (not sent)' : 'Planned')) + (human.flightId ? (' • Rocket ' + human.flightId) : '') + '</div>';
+        h += '</div>';
+        h += '</div>';
+      });
+    }
+
+    h += '</article>';
+  });
+
+  wrap.innerHTML = h;
+}
+
+function renderPlanShareStatus() {
+  var statusEl = el("plan-share-status");
+  if (!statusEl) return;
+
+  if (!sharedPlanState) {
+    statusEl.innerHTML = "";
+    return;
+  }
+
+  var source = sharedPlanSourceUrl ? (' <a href="' + escapeHtml(sharedPlanSourceUrl) + '" target="_blank" rel="noopener noreferrer">open source link</a>.') : "";
+  var h = '';
+  h += '<div class="info-box">You are viewing a read-only shared plan snapshot from the URL hash. Local plan data is unchanged.' + source + '</div>';
+  h += '<div class="inventory-actions">';
+  h += '<button type="button" class="mini-btn" id="plan-shared-import-btn">Import shared plan to local</button>';
+  h += '<button type="button" class="mini-btn" id="plan-shared-dismiss-btn">Dismiss shared snapshot</button>';
+  h += '</div>';
+  statusEl.innerHTML = h;
+
+  var importBtn = el("plan-shared-import-btn");
+  if (importBtn) importBtn.addEventListener("click", importSharedPlanToLocal);
+
+  var dismissBtn = el("plan-shared-dismiss-btn");
+  if (dismissBtn) dismissBtn.addEventListener("click", dismissSharedPlanView);
+}
+
 function formatPlanLoadoutPills(countMap, itemKind) {
   var keys = Object.keys(countMap || {});
   if (!keys.length) {
@@ -1153,6 +1728,12 @@ function renderPlanTab() {
 
   appState.plan = normalizePlan(appState.plan);
   populateOptimizerSessionSelect();
+  renderPlanShareStatus();
+  renderSharedPlanReadOnly();
+  var shareModal = el("plan-share-modal");
+  if (shareModal && !shareModal.classList.contains("is-hidden")) {
+    renderPlanShareSessionPicker();
+  }
 
   var usage = buildPlanInventoryUsage();
   var totalHumans = (appState.plan.humans || []).length;
@@ -2935,6 +3516,9 @@ function init() {
   appState.theme = normalizeTheme(profile.theme);
   applyTheme(appState.theme);
 
+  sharedPlanState = readSharedPlanFromLocationHash();
+  sharedPlanSourceUrl = sharedPlanState ? window.location.href : "";
+
   el("theme-select").value = appState.theme;
   el("theme-select").addEventListener("change", function() {
     appState.theme = normalizeTheme(el("theme-select").value);
@@ -3042,6 +3626,39 @@ function init() {
     }
     addHumanPlanEntry("sandbox", lastSandboxSnapshot.label, lastSandboxSnapshot.professionName, lastSandboxSnapshot.chosenFood, lastSandboxSnapshot.chosenMem);
   });
+  el("plan-share-btn").addEventListener("click", openPlanShareModal);
+  el("plan-share-close-btn").addEventListener("click", closePlanShareModal);
+  el("plan-share-all-sessions").addEventListener("change", function() {
+    planShareUiState.allSessions = !!el("plan-share-all-sessions").checked;
+    updatePlanShareSessionControlsUI();
+    refreshPlanSharePreview();
+  });
+  el("plan-share-sel-all-btn").addEventListener("click", function() {
+    (appState.plan.sessions || []).forEach(function(session) {
+      planShareUiState.selectedSessionIds[session.id] = true;
+    });
+    renderPlanShareSessionPicker();
+  });
+  el("plan-share-sel-none-btn").addEventListener("click", function() {
+    (appState.plan.sessions || []).forEach(function(session) {
+      planShareUiState.selectedSessionIds[session.id] = false;
+    });
+    renderPlanShareSessionPicker();
+  });
+  el("plan-share-copy-btn").addEventListener("click", function() {
+    var input = el("plan-share-link-input");
+    if (!input) return;
+    copyTextToClipboard(input.value, function(ok) {
+      setHTML("results", ok
+        ? '<div class="info-box">Share link copied to clipboard.</div>'
+        : '<div class="warn-box">Could not copy to clipboard. Copy the link manually.</div>');
+    });
+  });
+  el("plan-share-modal").addEventListener("click", function(evt) {
+    if (evt.target && evt.target.id === "plan-share-modal") {
+      closePlanShareModal();
+    }
+  });
 
   // Created profession controls
   el("prof-mark-created-btn").addEventListener("click", function() {
@@ -3064,6 +3681,12 @@ function init() {
   refreshReferenceViews();
   setActiveTab(appState.activeTab || "optimizer");
   populateProfs();
+
+  window.addEventListener("hashchange", function() {
+    sharedPlanState = readSharedPlanFromLocationHash();
+    sharedPlanSourceUrl = sharedPlanState ? window.location.href : "";
+    renderPlanTab();
+  });
 }
 
 document.addEventListener("DOMContentLoaded", init);

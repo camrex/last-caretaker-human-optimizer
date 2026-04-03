@@ -96,6 +96,7 @@ Bio-stuff is farmed and processed into food ingredients at approximately 1:1
 - Use the **Progress** tab to mark professions as created and track committee completion.
 - The **Optimizer** tab still includes quick mark/unmark actions for the currently selected profession.
 - Use **Export planning JSON** / **Import planning JSON** to back up and restore profile state, including profession selection/mode, baseline sliders, toggles, inventory mode, theme, inventory counts, created professions, and plan/session/rocket data.
+- Use **Share plan via QR** in the Plan tab to generate a compressed URL hash for read-only plan viewing on another device. You can share all sessions or only selected sessions, and a built-in size indicator helps estimate QR scan reliability. Shared links do not overwrite local data unless you explicitly import.
 - No server-side storage is used.
 
 ### Tabs
@@ -103,7 +104,7 @@ Bio-stuff is farmed and processed into food ingredients at approximately 1:1
 - **Home:** overview, spoiler warning, project notice, and PECO-theme easter egg terminal screen.
 - **Optimizer:** build a plan for a specific profession and review Ash Notebook recommendations.
 - **Sandbox:** set custom food/memory quantities and preview resulting traits plus potentially satisfied professions.
-- **Plan:** organize sessions, store planned humans, assign rockets, and review deficits.
+- **Plan:** organize sessions, store planned humans, assign rockets, review deficits, and generate QR/share links for read-only mobile snapshots.
 - **Progress:** track created professions, filter remaining work, and monitor committee completion.
 - **Professions:** browse profession requirements, filter by committee/tier/status, and mark created/uncreated.
 - **Foods:** browse food data and manage food inventory directly on cards.

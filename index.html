@@ -262,8 +262,11 @@ DATA
       <button type="button" class="mini-btn" id="plan-add-session-btn">Add session</button>
       <button type="button" class="mini-btn" id="plan-add-optimizer-btn">Add last Optimizer result</button>
       <button type="button" class="mini-btn" id="plan-add-sandbox-btn">Add current Sandbox setup</button>
+      <button type="button" class="mini-btn" id="plan-share-btn">Share plan via QR</button>
     </div>
 
+    <div id="plan-share-status"></div>
+    <div id="plan-shared-view"></div>
     <div id="plan-summary"></div>
     <div class="section-label">Space flights</div>
     <div id="plan-flight-list"></div>
@@ -363,11 +366,43 @@ DATA
 
 </div><!-- /container -->
 
+<div id="plan-share-modal" class="modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="plan-share-modal-title">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2 id="plan-share-modal-title">Share Plan</h2>
+      <button type="button" class="mini-btn" id="plan-share-close-btn">Close</button>
+    </div>
+    <p class="muted inventory-note">Scan this QR code on mobile to open a read-only shared view of the plan.</p>
+    <div class="options-row compact-row">
+      <label class="checkbox-inline" for="plan-share-all-sessions">
+        <input type="checkbox" id="plan-share-all-sessions" checked>
+        <span>Share all sessions</span>
+      </label>
+      <div class="inventory-actions" id="plan-share-session-actions">
+        <button type="button" class="mini-btn" id="plan-share-sel-all-btn">Select all</button>
+        <button type="button" class="mini-btn" id="plan-share-sel-none-btn">Clear all</button>
+      </div>
+    </div>
+    <div id="plan-share-session-list" class="share-session-list"></div>
+    <div id="plan-share-qr" class="plan-share-qr"></div>
+    <div id="plan-share-quality" class="info-box"></div>
+    <label for="plan-share-link-input">Share link</label>
+    <input id="plan-share-link-input" class="number-input" type="text" readonly>
+    <div class="inventory-actions">
+      <button type="button" class="mini-btn" id="plan-share-copy-btn">Copy link</button>
+      <a id="plan-share-open-link" class="mini-btn link-btn" href="#" target="_blank" rel="noopener noreferrer">Open link</a>
+    </div>
+  </div>
+</div>
+
 <!-- Data files — order matters -->
 <script src="data/bio.js"></script>
 <script src="data/foods.js"></script>
 <script src="data/memories.js"></script>
 <script src="data/professions.js"></script>
+<!-- Lightweight browser-only share helpers -->
+<script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
 <!-- Logic -->
 <script src="js/optimizer.js"></script>
 <script src="js/ui.js"></script>
