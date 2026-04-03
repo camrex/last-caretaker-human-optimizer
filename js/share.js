@@ -97,6 +97,18 @@
     return out;
   }
 
+  function defaultSessionName(id) {
+    return "Session " + id;
+  }
+
+  function defaultPlanHumanLabel() {
+    return "Planned human";
+  }
+
+  function decodePlanHumanSource(flags) {
+    return (flags & 4) ? "sandbox" : "optimizer";
+  }
+
   function normalizeTheme(raw) {
     return raw === "peco" ? "peco" : "default";
   }
@@ -190,25 +202,29 @@
       sessions: Array.isArray(payload.s) ? payload.s.map(function(row, idx) {
         var id = parseInt(row && row[0], 10);
         if (isNaN(id) || id <= 0) id = idx + 1;
-        return { id: id, name: String((row && row[1]) || ("Session " + id)) };
+        return { id: id, name: String((row && row[1]) || defaultSessionName(id)) };
       }) : [],
       humans: Array.isArray(payload.h) ? payload.h.map(function(row, idx) {
         var id = parseInt(row && row[0], 10);
         if (isNaN(id) || id <= 0) id = idx + 1;
         var sessionId = parseInt(row && row[1], 10);
         if (isNaN(sessionId) || sessionId <= 0) sessionId = 1;
-        var flightId = parseInt(row && row[9], 10);
+        var flags = parseInt(row && row[5], 10);
+        if (isNaN(flags) || flags < 0) flags = 0;
+        var professionName = nameForToken("professions", row && row[2]);
+        if (typeof professionName !== "string") professionName = "";
+        var flightId = parseInt(row && row[6], 10);
         if (isNaN(flightId) || flightId <= 0) flightId = null;
         return {
           id: id,
           sessionId: sessionId,
-          label: String((row && row[2]) || "Planned human"),
-          source: (row && row[3]) === "sandbox" ? "sandbox" : "optimizer",
-          professionName: String((row && row[4]) || ""),
-          chosenFood: countMapFromPairsByKind(row && row[5], "foods"),
-          chosenMem: countMapFromPairsByKind(row && row[6], "memories"),
-          created: !!(row && row[7]),
-          sent: !!(row && row[8]),
+          label: String((row && row[7]) || defaultPlanHumanLabel()),
+          source: decodePlanHumanSource(flags),
+          professionName: professionName,
+          chosenFood: countMapFromPairsByKind(row && row[3], "foods"),
+          chosenMem: countMapFromPairsByKind(row && row[4], "memories"),
+          created: !!(flags & 1),
+          sent: !!(flags & 2),
           flightId: flightId,
         };
       }) : [],
@@ -220,9 +236,9 @@
           : [];
         return { id: id, humanIds: humanIds.slice(0, 3) };
       }) : [],
-      nextSessionId: parseInt(payload.ns, 10),
-      nextHumanId: parseInt(payload.nh, 10),
-      nextFlightId: parseInt(payload.nf, 10),
+      nextSessionId: NaN,
+      nextHumanId: NaN,
+      nextFlightId: NaN,
     };
 
     return normalizePlan(rawPlan);
@@ -282,16 +298,7 @@
     var parsed = decodePayload(encoded);
     if (!parsed) return null;
 
-    // Backward compatibility: legacy plan payload format.
-    if (parsed.v === 1 && parsed.p) {
-      return {
-        type: "plan",
-        plan: expandPayload(parsed.p),
-        sharedTheme: normalizeTheme(parsed.t),
-      };
-    }
-
-    if (parsed.v >= 2) {
+    if (parsed.v === 3) {
       var st = parsed.st || "plan";
       if (st === "inventory") {
         return {
