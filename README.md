@@ -1,130 +1,195 @@
-# The Last Caretaker — Human Optimizer
+# The Last Caretaker - Human Optimizer
 
-A lightweight web app for calculating the optimal food and memory combination
-to grow a human for any profession in The Last Caretaker.
+A static web app for planning and optimizing food + memory builds for professions in The Last Caretaker, including inventory-aware planning, progress tracking, and a mobile second-screen share flow.
 
 > [!WARNING]
 > Spoilers ahead: this project includes profession, trait, planning, and progression information that may reveal discovery content in The Last Caretaker.
 
-## Quick start
+## What This App Does
 
-Open `index.html` in any browser. No server required.
+The app helps you:
 
-If you want live-reload during development, any of these work:
+- Optimize food and memory combinations for a selected profession.
+- Track inventory and calculate deficits before crafting.
+- Build multi-session human plans with rocket grouping.
+- Track created/planned profession progress by committee.
+- Share a read-only mobile snapshot of your plan via QR code.
+
+No backend is required for runtime. The app is fully client-side and hosted as a static site.
+
+## Core Workflows
+
+### Profession optimization
+
+Use the Optimizer tab to select a profession, set baseline physical floors, apply exclusions/toggles, and generate a recommended plan.
+
+- Physical traits (Life Exp, Height, Weight, Strength, Intellect) are satisfied by food.
+- Personality traits are satisfied by memories.
+- Hard minimum floors: Life Exp >= 10, Height >= 30, Weight >= 20.
+
+### Planning and deficit review
+
+Use the Plan tab to accumulate humans into sessions and rockets.
+
+- Sessions support up to 4 planned humans.
+- Rockets support up to 3 humans.
+- Deficit tables show what inventory is missing globally and per session.
+
+### Second-screen mobile companion (QR share)
+
+If you play fullscreen and want the plan visible on phone:
+
+1. Build/update your plan on PC.
+2. In Plan, click Share plan via QR.
+3. Scan with your phone.
+4. Open the read-only mobile page (`share.html`) as your companion view while gaming.
+
+Notes:
+
+- Share payload is compressed into URL hash (no server storage).
+- You can share all sessions or selected sessions only.
+- QR size guidance is shown in-app (balanced and ultra-safe subset suggestions).
+- Shared page defaults to the sharer's theme, while viewers can still switch theme on mobile.
+
+## App Feature Map
+
+- Home: overview, workflow guidance, and project notice.
+- Optimizer: profession-targeted plan generation with inventory-aware options.
+- Sandbox: free-form quantity testing and resulting profession fulfillment.
+- Plan: sessions, rockets, deficits, and QR/share generation.
+- Progress: created/planned/remaining tracking by committee.
+- Professions: browsable requirements and status marking.
+- Foods: food reference and inventory editing.
+- Memories: memory reference and inventory editing.
+- Data: import/export profile JSON and reset inventory.
+
+## Architecture Overview
+
+### Runtime architecture (app first)
+
+This project is a browser-only static app with two entry pages:
+
+- `index.html`: main planner SPA (tab-based UI).
+- `share.html`: mobile-focused read-only plan viewer for shared links.
+
+JavaScript is split by responsibility:
+
+- `js/optimizer.js`: optimization engine and domain logic.
+- `js/ui.js`: UI rendering, state orchestration, persistence, plan/share actions.
+- `js/share.js`: decode/render logic for shared mobile snapshots.
+
+Styling is split by page:
+
+- `css/styles.css`: main app styles and themes.
+- `css/share.css`: mobile share page styles and themes.
+
+Domain data is pre-generated/static:
+
+- `data/foods.js`
+- `data/memories.js`
+- `data/professions.js`
+- `data/bio.js` (manually maintained source metadata and conversion helpers)
+
+### Persistence model
+
+Runtime data is stored in browser localStorage (per browser profile/device), including:
+
+- Inventory (foods/memories)
+- Sandbox values + filters
+- Plan sessions/humans/flights
+- Created professions
+- Selected tab/mode/theme and optimizer settings
+
+Import/export JSON is provided in the Data tab for portability.
+
+### Share model
+
+Plan sharing uses compressed URL hash payloads:
+
+- No backend persistence
+- Read-only mobile rendering by default
+- Optional import into local planner state from the shared snapshot
+
+## Running Locally
+
+Open `index.html` directly in a browser.
+
+Optional local server options:
 
 - VS Code + Live Server extension
 - `python -m http.server 8080` then open <http://localhost:8080>
-- `npx serve .` if you have Node installed
+- `npx serve .`
 
-## File structure
+## Hosting and Deployment
 
-```text
-last-caretaker/
-├── index.html          Main app
-├── css/
-│   └── styles.css      All styling (default + PECO theme)
-├── js/
-│   ├── optimizer.js    Core optimization logic (no DOM dependency)
-│   └── ui.js           Rendering and event handling
-└── data/
-    ├── bio.js          Bio-stuff sources, ingredients, conversion ratios
-    ├── foods.js        Food definitions (trait outputs + ingredient recipes)
-    ├── memories.js     Memory definitions (personality trait outputs + ranks)
-    └── professions.js  Profession definitions (all trait requirements)
-```
-
-## Updating data
-
-The canonical source for foods, memories, and professions is:
-
-- `resource/The Last Caretaker - Human Needs.xlsx`
-
-Use the sync script to regenerate data files:
-
-- `e:/DevProjects/last-caretaker-human-optimizer/.venv/Scripts/python.exe scripts/sync_tables_from_excel.py --write`
-
-Check if local data files are in sync with the workbook:
-
-- `e:/DevProjects/last-caretaker-human-optimizer/.venv/Scripts/python.exe scripts/sync_tables_from_excel.py --check`
-
-Notes:
-
-- `data/foods.js`, `data/memories.js`, and `data/professions.js` are generated in sparse format (non-zero numeric fields only).
-- `data/bio.js` remains manually maintained for conversion ratios and source metadata.
-
-## Hosting on GitHub Pages
-
-Live site:
+Production is hosted on GitHub Pages:
 
 - <https://camrex.github.io/last-caretaker-human-optimizer/>
 
-For maintainers: deployment steps and release checklist are in `docs/deploy.md`.
+For setup and release checklist, see:
 
-Notes:
+- `docs/deploy.md`
 
-- `localStorage` (inventory, plan/session state, created professions, settings, theme) works on GitHub Pages.
-- Data is browser-local per device/browser profile.
-- No backend/server is required.
+Key deployment notes:
 
-## Key mechanics
+- Push to `main` triggers Pages rebuild.
+- App runtime remains fully static (no server runtime).
 
-### Physical traits (food)
+## Data Pipeline (Maintainer "Backend")
 
-Life Exp, Height, Weight, Strength, Intellect are satisfied entirely by food.
-Hard minimums: Life Exp ≥ 10, Height ≥ 30, Weight ≥ 20 for any human.
+Although the app runtime is static, data maintenance uses a Python sync pipeline.
 
-### Personality traits (memories)
+Canonical source workbook:
 
-Comms, Empathy, Leadership, Discipline, Focus, Adaptability, Creativity,
-Patience, Wisdom, Logic are satisfied entirely by memories.
-Star Child is a special trait currently only provided by Star Child Memory.
+- `resource/The Last Caretaker - Human Needs.xlsx`
 
-### Bio-stuff conversion
+Sync script:
 
-Bio-stuff is farmed and processed into food ingredients at approximately 1:1
-(actual yield ~10–20% higher at full power).
+- `scripts/sync_tables_from_excel.py`
 
-- Bio Seaweed → Carbohydrates + Protein (both simultaneously from 1 unit)
-- Bio Flesh → Mito. Amp. + Nanite Nutrient + Bioregulator (all three simultaneously)
+Commands:
 
-### Inventory (local only)
+- Write generated data:
+    - `e:/DevProjects/last-caretaker-human-optimizer/.venv/Scripts/python.exe scripts/sync_tables_from_excel.py --write`
+- Check whether generated files are in sync:
+    - `e:/DevProjects/last-caretaker-human-optimizer/.venv/Scripts/python.exe scripts/sync_tables_from_excel.py --check`
 
-- Inventory counts for foods and memories are stored in browser `localStorage`.
-- Enable **Use stored inventory limits** to constrain optimization to your owned counts.
-- Ash Notebook has a dedicated cap input (default 10) so recommendations account for finite Artifact memory usage.
-- You can select professions using either **Committee then profession** or **Direct profession selection** mode.
-- Use the **Progress** tab to mark professions as created and track committee completion.
-- The **Optimizer** tab still includes quick mark/unmark actions for the currently selected profession.
-- Use **Export planning JSON** / **Import planning JSON** to back up and restore profile state, including profession selection/mode, baseline sliders, toggles, inventory mode, theme, inventory counts, created professions, and plan/session/rocket data.
-- Use **Share plan via QR** in the Plan tab to generate a compressed URL hash for read-only plan viewing on another device. Shared links open a dedicated mobile-focused page (`share.html`) instead of the full app, defaulting to the sharer's selected theme while still allowing the mobile viewer to switch themes. You can share all sessions or only selected sessions, and a built-in size indicator helps estimate QR scan reliability. Shared links do not overwrite local data unless you explicitly import.
-- No server-side storage is used.
+Pipeline output:
 
-### Second-screen workflow (PC + phone)
+- Regenerates `data/foods.js`, `data/memories.js`, `data/professions.js` in sparse format (non-zero numeric fields only).
+- Leaves `data/bio.js` manually maintained.
 
-If you play in fullscreen and do not want to alt-tab to the planner:
+## Repository Structure
 
-1. Build or update your plan on PC in the app.
-2. Open the **Plan** tab and click **Share plan via QR**.
-3. Scan the QR code with your phone.
-4. Keep the mobile `share.html` page open as a read-only companion while you play.
+```text
+last-caretaker-human-optimizer/
+├── index.html
+├── share.html
+├── css/
+│   ├── styles.css
+│   └── share.css
+├── js/
+│   ├── optimizer.js
+│   ├── ui.js
+│   └── share.js
+├── data/
+│   ├── bio.js
+│   ├── foods.js
+│   ├── memories.js
+│   └── professions.js
+├── scripts/
+│   └── sync_tables_from_excel.py
+├── resource/
+│   └── The Last Caretaker - Human Needs.xlsx
+└── docs/
+        └── deploy.md
+```
 
-Notes:
+## Privacy and Constraints
 
-- The shared mobile page is optimized for quick viewing and does not modify local PC data.
-- The shared link includes the current app theme by default, and mobile viewers can still switch themes.
-- Use session-only sharing if you want smaller QR codes for easier scanning.
-
-### Tabs
-
-- **Home:** overview, spoiler warning, project notice, and PECO-theme easter egg terminal screen.
-- **Optimizer:** build a plan for a specific profession and review Ash Notebook recommendations.
-- **Sandbox:** set custom food/memory quantities and preview resulting traits plus potentially satisfied professions.
-- **Plan:** organize sessions, store planned humans, assign rockets, review deficits, and generate QR/share links for read-only mobile snapshots.
-- **Progress:** track created professions, filter remaining work, and monitor committee completion.
-- **Professions:** browse profession requirements, filter by committee/tier/status, and mark created/uncreated.
-- **Foods:** browse food data and manage food inventory directly on cards.
-- **Memories:** browse memory data, filter by rank/type/trait, and manage memory inventory directly on cards.
-- **Data:** import/export planning JSON and reset inventory to zero.
+- All runtime state is local to the browser/device unless explicitly exported/shared.
+- Shared links can expose planning details to anyone with the URL.
+- QR scan reliability depends on payload size; prefer session-only sharing when needed.
 
 ## Planned / TBD
 
