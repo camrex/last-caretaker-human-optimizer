@@ -40,7 +40,7 @@ var PROFESSIONS = [
   { id:35, name:"Logistics High Command", tier:4, committee:"Governance & Logistics", lifeExp:10, height:220, weight:20, discipline:80, focus:100, logic:120 },
   { id:36, name:"Quantum Engineer", tier:4, committee:"Deep Systems", lifeExp:10, height:30, weight:20, strength:180, discipline:60, focus:80, logic:80 },
   { id:37, name:"Quantum Physicist", tier:4, committee:"Deep Systems", lifeExp:10, height:30, weight:20, intellect:220, patience:80, wisdom:100, logic:120 },
-  { id:38, name:"Sustenance Architect", tier:4, committee:"Deep Systems", lifeExp:180, height:200, weight:20, leadership:50, creativity:50, patience:50 },
+  { id:38, name:"Sustenance Architect", tier:4, committee:"Deep Systems", lifeExp:180, height:200, weight:20, leadership:50, creativity:50, patience:160 },
   { id:39, name:"Existential Chancellor", tier:4, committee:"Field Continuance", lifeExp:10, height:200, weight:120, comms:100, patience:80, wisdom:120 },
   { id:40, name:"Existential Expressionist", tier:4, committee:"Meaning & Frontier", lifeExp:200, height:30, weight:20, comms:60, empathy:80, creativity:120 },
   { id:41, name:"Star Child", tier:5, committee:null, lifeExp:10, height:30, weight:20, starChild:1 }
