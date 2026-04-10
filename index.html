@@ -38,6 +38,7 @@
     <button type="button" class="tab-btn" id="tab-btn-professions" data-tab="professions">Professions</button>
     <button type="button" class="tab-btn" id="tab-btn-foods" data-tab="foods">Foods</button>
     <button type="button" class="tab-btn" id="tab-btn-memories" data-tab="memories">Memories</button>
+    <button type="button" class="tab-btn" id="tab-btn-map" data-tab="map">Map</button>
     <button type="button" class="tab-btn" id="tab-btn-data" data-tab="data">Data</button>
   </div>
 
@@ -96,7 +97,7 @@ DATA
       <div class="home-feature-card"><strong>Plan</strong><span>Organize sessions, assign rockets, identify per-session and global crafting deficits, and share read-only snapshots.</span></div>
       <div class="home-feature-card"><strong>Second-screen QR share</strong><span>Generate a QR code and open a mobile-focused read-only plan page on your phone so your game can stay fullscreen on PC.</span></div>
       <div class="home-feature-card"><strong>Progress</strong><span>Track planned/created professions and committee completion in one view.</span></div>
-      <div class="home-feature-card"><strong>Reference tabs</strong><span>Browse professions, foods, and memories while editing inventory directly from cards.</span></div>
+      <div class="home-feature-card"><strong>Reference tabs</strong><span>Browse professions, foods, memories, and map locations while editing inventory and checking coordinates.</span></div>
       <div class="home-feature-card"><strong>Data</strong><span>Export and import your planning profile to back up and restore local state.</span></div>
     </div>
 
@@ -356,6 +357,38 @@ DATA
     <p class="muted inventory-note">Adjust memory inventory directly on each memory card.</p>
   </section>
 
+  <section id="tab-map" class="tab-panel is-hidden">
+    <div class="section-label">Map locations</div>
+    <p class="muted inventory-note">Browse known points of interest on a 100m grid. Negative Y is north, so more negative values are farther north.</p>
+
+    <div class="section-label">Type filter</div>
+    <div id="map-type-filters" class="filter-chip-row"></div>
+
+    <div class="row2 map-controls-row">
+      <div>
+        <label for="map-search-input">Search</label>
+        <input id="map-search-input" class="number-input" type="text" placeholder="Search by name, note, type, or coordinates">
+      </div>
+      <div class="map-toggle-col map-toggle-stack">
+        <label class="checkbox-inline" for="map-hide-spoilers">
+          <input type="checkbox" id="map-hide-spoilers">
+          <span>Hide spoiler-tagged locations (currently unknown entries)</span>
+        </label>
+        <label class="checkbox-inline" for="map-show-connections">
+          <input type="checkbox" id="map-show-connections">
+          <span>Show map connection lines</span>
+        </label>
+      </div>
+    </div>
+
+    <div id="map-reference-meta" class="muted inventory-note"></div>
+    <div id="map-selected-details" class="info-box">Select a location to see details.</div>
+    <div id="map-viewer"></div>
+
+    <div class="section-label">Visible locations</div>
+    <div id="map-location-list" class="reference-grid"></div>
+  </section>
+
   <section id="tab-data" class="tab-panel is-hidden">
     <div class="section-label">Plan data (local only)</div>
     <p class="muted inventory-note">Inventory, created professions, and planning settings are saved in your browser. Use export/import to back up or move between devices.</p>
@@ -406,11 +439,26 @@ DATA
   </div>
 </div>
 
+<div id="map-full-window-modal" class="modal map-full-window-modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="map-full-window-title">
+  <div class="modal-card map-full-window-card">
+    <div class="modal-head">
+      <div>
+        <h2 id="map-full-window-title">Full-window map</h2>
+        <p class="muted inventory-note map-full-window-note">All known locations, radar rings, and map connections in one view.</p>
+      </div>
+      <button type="button" class="mini-btn" id="map-full-window-close-btn">Close</button>
+    </div>
+    <div id="map-full-window-viewer" class="map-full-window-viewer"></div>
+  </div>
+</div>
+
 <!-- Data files — order matters -->
 <script src="data/bio.js"></script>
 <script src="data/foods.js"></script>
 <script src="data/memories.js"></script>
 <script src="data/professions.js"></script>
+<script src="data/map_locations.js"></script>
+<script src="data/map_connections.js"></script>
 <!-- Lightweight browser-only share helpers -->
 <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>

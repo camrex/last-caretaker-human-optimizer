@@ -18,9 +18,12 @@ import openpyxl
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKBOOK_PATH = ROOT / "resource" / "The Last Caretaker - Human Needs.xlsx"
+MAP_WORKBOOK_PATH = ROOT / "resource" / "The Last Caretaker - Map Locations.xlsx"
 FOODS_PATH = ROOT / "data" / "foods.js"
 MEMORIES_PATH = ROOT / "data" / "memories.js"
 PROFESSIONS_PATH = ROOT / "data" / "professions.js"
+MAP_LOCATIONS_PATH = ROOT / "data" / "map_locations.js"
+MAP_CONNECTIONS_PATH = ROOT / "data" / "map_connections.js"
 ITEM_IDS_PATH = ROOT / "resource" / "item_ids.json"
 
 FOOD_NUMERIC_KEYS = [
@@ -78,6 +81,24 @@ def clean_num(v: Any) -> int:
     return 0 if v is None else int(v)
 
 
+def clean_coord(v: Any) -> float:
+    if v is None or v == "":
+        return 0.0
+    try:
+        return float(v)
+    except Exception:
+        return 0.0
+
+
+def clean_bool(v: Any) -> bool:
+    if isinstance(v, bool):
+        return v
+    if v is None:
+        return False
+    text = str(v).strip().lower()
+    return text in {"1", "true", "yes", "y", "x"}
+
+
 def rank_to_num(rank_value: Any) -> int:
     if rank_value is None:
         return 0
@@ -91,6 +112,10 @@ def rank_to_num(rank_value: Any) -> int:
 def time_to_text(v: Any) -> str:
     if isinstance(v, time):
         return f"{v.hour}:{v.minute:02d}"
+    if isinstance(v, (int, float)) and 0 <= float(v) < 1:
+        total_minutes = int(round(float(v) * 24 * 60))
+        hours, minutes = divmod(total_minutes, 60)
+        return f"{hours}:{minutes:02d}"
     if v is None:
         return ""
     return str(v)
@@ -247,6 +272,97 @@ def parse_professions(wb: openpyxl.Workbook) -> list[dict[str, Any]]:
     return professions
 
 
+def parse_map_locations(path: Path) -> list[dict[str, Any]]:
+    wb = openpyxl.load_workbook(path, data_only=True)
+    ws = wb["LOCATIONS"] if "LOCATIONS" in wb.sheetnames else wb[wb.sheetnames[0]]
+    locations: list[dict[str, Any]] = []
+
+    header_row = next(ws.iter_rows(min_row=1, max_row=1, values_only=True), ())
+    header_idx = {str(value).strip().upper(): idx for idx, value in enumerate(header_row) if value is not None}
+
+    def cell_value(row: tuple[Any, ...], column_name: str, fallback_index: int | None = None) -> Any:
+        idx = header_idx.get(column_name)
+        if idx is None:
+            idx = fallback_index
+        if idx is None or idx >= len(row):
+            return None
+        return row[idx]
+
+    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=1):
+        x_val = cell_value(row, "X", 0)
+        y_val = cell_value(row, "Y", 1)
+        name_val = cell_value(row, "NAME", 2)
+        if not row or x_val is None or y_val is None or not name_val:
+            continue
+
+        name = str(name_val).strip()
+        type_name = str(cell_value(row, "TYPE", 3) or "Unknown").strip()
+        note = str(cell_value(row, "NOTE", 4) or "").strip()
+        radius = clean_num(cell_value(row, "RADIUS", 5))
+        spoiler_flag = clean_bool(cell_value(row, "SPOILER", 6))
+        spoiler_trigger = str(cell_value(row, "SPOILER_TRIGGER", 7) or "").strip()
+        locations.append(
+            {
+                "id": idx,
+                "x": clean_coord(x_val),
+                "y": clean_coord(y_val),
+                "name": name,
+                "type": type_name,
+                "note": note,
+                "radius": radius,
+                # Keep current UI spoiler behavior limited to explicit unknown names for now.
+                "spoiler": name == "[UNKNOWN]",
+                # Future-ready spreadsheet metadata for trigger-driven reveal logic.
+                "spoilerFlag": spoiler_flag,
+                "spoilerTrigger": spoiler_trigger,
+            }
+        )
+
+    return locations
+
+
+def parse_map_connections(path: Path) -> list[dict[str, Any]]:
+    wb = openpyxl.load_workbook(path, data_only=True)
+    if "CONNECTIONS" not in wb.sheetnames:
+        return []
+
+    ws = wb["CONNECTIONS"]
+    header_row = next(ws.iter_rows(min_row=1, max_row=1, values_only=True), ())
+    header_idx = {str(value).strip().upper(): idx for idx, value in enumerate(header_row) if value is not None}
+
+    def cell_value(row: tuple[Any, ...], column_name: str, fallback_index: int | None = None) -> Any:
+        idx = header_idx.get(column_name)
+        if idx is None:
+            idx = fallback_index
+        if idx is None or idx >= len(row):
+            return None
+        return row[idx]
+
+    connections: list[dict[str, Any]] = []
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if not row:
+            continue
+        ident = clean_num(cell_value(row, "ID", 0))
+        from_name = str(cell_value(row, "FROM", 1) or "").strip()
+        to_name = str(cell_value(row, "TO", 4) or "").strip()
+        if not from_name or not to_name:
+            continue
+
+        connections.append(
+            {
+                "id": ident,
+                "from": from_name,
+                "fromX": clean_coord(cell_value(row, "FROM_X", 2)),
+                "fromY": clean_coord(cell_value(row, "FROM_Y", 3)),
+                "to": to_name,
+                "toX": clean_coord(cell_value(row, "TO_X", 5)),
+                "toY": clean_coord(cell_value(row, "TO_Y", 6)),
+            }
+        )
+
+    return connections
+
+
 def render_sparse_object(item: dict[str, Any], fixed: list[str], numeric: list[str]) -> str:
     parts: list[str] = []
     for key in fixed:
@@ -337,6 +453,92 @@ def render_professions(professions: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def render_map_locations(locations: list[dict[str, Any]]) -> str:
+    def js_number(v: Any) -> str:
+        try:
+            num = float(v)
+        except Exception:
+            return "0"
+        if num.is_integer():
+            return str(int(num))
+        return format(num, "g")
+
+    lines = [
+        "// data/map_locations.js",
+        "// Map locations synced from The Last Caretaker - Map Locations.xlsx.",
+        "// Coordinates use 100m grid units; negative Y values are north.",
+        "// `spoilerFlag` and `spoilerTrigger` are future-facing metadata from the workbook.",
+        "",
+        "var MAP_LOCATIONS = [",
+    ]
+    for i, item in enumerate(locations):
+        parts = [
+            f"id:{item['id']}",
+            f"x:{js_number(item['x'])}",
+            f"y:{js_number(item['y'])}",
+            f"name:{js_quote(item['name'])}",
+            f"type:{js_quote(item['type'])}",
+        ]
+        if item.get("note"):
+            parts.append(f"note:{js_quote(item['note'])}")
+        if int(item.get("radius", 0) or 0) > 0:
+            parts.append(f"radius:{int(item['radius'])}")
+        if item.get("spoiler"):
+            parts.append("spoiler:true")
+        if item.get("spoilerFlag"):
+            parts.append("spoilerFlag:true")
+        if item.get("spoilerTrigger"):
+            parts.append(f"spoilerTrigger:{js_quote(item['spoilerTrigger'])}")
+        text = "  { " + ", ".join(parts) + " }"
+        if i < len(locations) - 1:
+            text += ","
+        lines.append(text)
+    lines.extend([
+        "];",
+        "",
+        "var MAP_LOCATION_TYPES = " + js_quote(sorted({loc["type"] for loc in locations})) + ";",
+        "",
+    ])
+    return "\n".join(lines)
+
+
+def render_map_connections(connections: list[dict[str, Any]]) -> str:
+    def js_number(v: Any) -> str:
+        try:
+            num = float(v)
+        except Exception:
+            return "0"
+        if num.is_integer():
+            return str(int(num))
+        return format(num, "g")
+
+    lines = [
+        "// data/map_connections.js",
+        "// Map connection lines synced from The Last Caretaker - Map Locations.xlsx (CONNECTIONS sheet).",
+        "",
+        "var MAP_CONNECTIONS = [",
+    ]
+    for i, item in enumerate(connections):
+        text = (
+            "  { id:" + str(int(item.get("id", 0) or 0))
+            + ", from:" + js_quote(item.get("from") or "")
+            + ", fromX:" + js_number(item.get("fromX"))
+            + ", fromY:" + js_number(item.get("fromY"))
+            + ", to:" + js_quote(item.get("to") or "")
+            + ", toX:" + js_number(item.get("toX"))
+            + ", toY:" + js_number(item.get("toY"))
+            + " }"
+        )
+        if i < len(connections) - 1:
+            text += ","
+        lines.append(text)
+    lines.extend([
+        "];",
+        "",
+    ])
+    return "\n".join(lines)
+
+
 def diff_check(path: Path, expected: str) -> bool:
     current = path.read_text(encoding="utf-8")
     return current == expected
@@ -353,6 +555,8 @@ def main() -> int:
     foods = parse_foods(wb)
     memories = parse_memories(wb)
     professions = parse_professions(wb)
+    map_locations = parse_map_locations(MAP_WORKBOOK_PATH)
+    map_connections = parse_map_connections(MAP_WORKBOOK_PATH)
     item_ids = load_item_ids_registry()
 
     # IDs are persisted in resource/item_ids.json so links remain stable over time.
@@ -364,6 +568,8 @@ def main() -> int:
         FOODS_PATH: render_foods(foods),
         MEMORIES_PATH: render_memories(memories),
         PROFESSIONS_PATH: render_professions(professions),
+        MAP_LOCATIONS_PATH: render_map_locations(map_locations),
+        MAP_CONNECTIONS_PATH: render_map_connections(map_connections),
         ITEM_IDS_PATH: render_item_ids_registry(item_ids),
     }
 

@@ -62,6 +62,7 @@ Notes:
 - Professions: browsable requirements and status marking.
 - Foods: food reference and inventory editing.
 - Memories: memory reference and inventory editing.
+- Map: filterable map locations reference with pan/zoom on the 100m grid.
 - Data: import/export profile JSON and reset inventory.
 - Data: import/export profile JSON, reset inventory, and generate inventory/progress QR snapshots.
 

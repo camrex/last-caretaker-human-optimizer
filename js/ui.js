@@ -70,6 +70,10 @@ var referenceState = {
   memoryRank: "all",
   memoryType: "all",
   memoryTrait: "all",
+  mapType: "all",
+  mapSearch: "",
+  mapHideSpoilers: false,
+  mapShowConnections: false,
 };
 
 var resultNotice = "";
@@ -83,6 +87,26 @@ var planShareUiState = {
   selectedSessionIds: {},
 };
 var shareModalMode = "plan";
+
+function createMapViewerState() {
+  return {
+    scale: 1,
+    offsetX: 24,
+    offsetY: 24,
+    selectedId: null,
+    initialized: false,
+    dragging: false,
+    pointerId: null,
+    dragStartX: 0,
+    dragStartY: 0,
+    startOffsetX: 24,
+    startOffsetY: 24,
+  };
+}
+
+var mapUiState = createMapViewerState();
+var mapFullWindowUiState = createMapViewerState();
+var MAP_GRID_SIZE_PX = 44;
 
 // ─── Baseline helper ──────────────────────────────────────────────────────────
 
@@ -285,7 +309,7 @@ function normalizeTheme(raw) {
 }
 
 function normalizeTab(raw) {
-  var valid = { home:1, optimizer:1, sandbox:1, plan:1, progress:1, professions:1, foods:1, memories:1, data:1 };
+  var valid = { home:1, optimizer:1, sandbox:1, plan:1, progress:1, professions:1, foods:1, memories:1, map:1, data:1 };
   return valid[raw] ? raw : "home";
 }
 
@@ -1690,7 +1714,7 @@ function applyPlanToInventory(result) {
 
 function setActiveTab(tabName) {
   appState.activeTab = normalizeTab(tabName);
-  ["home", "optimizer", "sandbox", "plan", "progress", "professions", "foods", "memories", "data"].forEach(function(tab) {
+  ["home", "optimizer", "sandbox", "plan", "progress", "professions", "foods", "memories", "map", "data"].forEach(function(tab) {
     var button = el("tab-btn-" + tab);
     var panel = el("tab-" + tab);
     var isActive = tab === appState.activeTab;
@@ -2004,10 +2028,578 @@ function renderMemoryReference() {
   });
 }
 
+function getAllMapLocations() {
+  return (typeof MAP_LOCATIONS !== "undefined" && Array.isArray(MAP_LOCATIONS)) ? MAP_LOCATIONS : [];
+}
+
+function getMapLocationById(locationId) {
+  var locations = getAllMapLocations();
+  for (var i = 0; i < locations.length; i += 1) {
+    if (locations[i].id === locationId) return locations[i];
+  }
+  return null;
+}
+
+function getAllMapConnections() {
+  return (typeof MAP_CONNECTIONS !== "undefined" && Array.isArray(MAP_CONNECTIONS)) ? MAP_CONNECTIONS : [];
+}
+
+function getMapBounds() {
+  var locations = getAllMapLocations();
+  if (!locations.length) {
+    return { minX: -1, maxX: 1, minY: -1, maxY: 1 };
+  }
+
+  var minX = locations[0].x;
+  var maxX = locations[0].x;
+  var minY = locations[0].y;
+  var maxY = locations[0].y;
+
+  locations.forEach(function(loc) {
+    var radius = Math.max(0, loc.radius || 0);
+    if ((loc.x - radius) < minX) minX = loc.x - radius;
+    if ((loc.x + radius) > maxX) maxX = loc.x + radius;
+    if ((loc.y - radius) < minY) minY = loc.y - radius;
+    if ((loc.y + radius) > maxY) maxY = loc.y + radius;
+  });
+
+  getAllMapConnections().forEach(function(conn) {
+    minX = Math.min(minX, conn.fromX, conn.toX);
+    maxX = Math.max(maxX, conn.fromX, conn.toX);
+    minY = Math.min(minY, conn.fromY, conn.toY);
+    maxY = Math.max(maxY, conn.fromY, conn.toY);
+  });
+
+  return {
+    minX: minX - 1,
+    maxX: maxX + 1,
+    minY: minY - 1,
+    maxY: maxY + 1,
+  };
+}
+
+function getMapTypeHue(type) {
+  var text = String(type || "");
+  var hash = 0;
+  for (var i = 0; i < text.length; i += 1) {
+    hash = ((hash << 5) - hash) + text.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash) % 360;
+}
+
+function getMapWorldMetrics() {
+  var bounds = getMapBounds();
+  return {
+    bounds: bounds,
+    worldWidth: (bounds.maxX - bounds.minX + 1) * MAP_GRID_SIZE_PX,
+    worldHeight: (bounds.maxY - bounds.minY + 1) * MAP_GRID_SIZE_PX,
+  };
+}
+
+function getMapMinZoomFor(prefix) {
+  var viewport = el((prefix || "map") + "-viewport");
+  var metrics = getMapWorldMetrics();
+  if (!viewport || !metrics.worldWidth || !metrics.worldHeight) return 0.05;
+
+  var fitX = Math.max(0.01, (viewport.clientWidth - 24) / metrics.worldWidth);
+  var fitY = Math.max(0.01, (viewport.clientHeight - 24) / metrics.worldHeight);
+  return Math.max(0.05, Math.min(1, Math.min(fitX, fitY)));
+}
+
+function clampMapZoomFor(prefix, value) {
+  return Math.max(getMapMinZoomFor(prefix), Math.min(3.5, value));
+}
+
+function applyMapViewportFor(prefix, state) {
+  var stage = el(prefix + "-stage");
+  if (!stage || !state) return;
+  stage.style.transform = "translate(" + state.offsetX + "px, " + state.offsetY + "px) scale(" + state.scale.toFixed(3) + ")";
+
+  var world = el(prefix + "-world");
+  if (world) {
+    var scale = Math.max(0.01, state.scale);
+    var markerSize = Math.max(4, Math.min(40, 14 / scale));
+    var markerBorder = Math.max(1, Math.min(3.25, 2 / scale));
+    var ringBorder = Math.max(0.9, Math.min(10, 2 / scale));
+    var labelFont = Math.max(5, Math.min(18, 10 / scale));
+    var labelOffsetX = Math.max(12, Math.min(26, 18 / scale));
+    var labelOffsetY = Math.max(6, Math.min(18, 10 / scale));
+    var minorAlpha = scale < 0.3 ? 0 : (scale < 0.55 ? 0.03 : 0.08);
+    var majorAlpha = scale < 0.3 ? 0.16 : (scale < 0.55 ? 0.14 : 0.16);
+
+    world.style.setProperty("--map-marker-size", markerSize.toFixed(2) + "px");
+    world.style.setProperty("--map-marker-border", markerBorder.toFixed(2) + "px");
+    world.style.setProperty("--map-ring-border", ringBorder.toFixed(2) + "px");
+    world.style.setProperty("--map-marker-label-font-size", labelFont.toFixed(2) + "px");
+    world.style.setProperty("--map-marker-label-offset-x", labelOffsetX.toFixed(2) + "px");
+    world.style.setProperty("--map-marker-label-offset-y", (-labelOffsetY).toFixed(2) + "px");
+    world.style.setProperty("--map-grid-minor-alpha", String(minorAlpha));
+    world.style.setProperty("--map-grid-major-alpha", String(majorAlpha));
+  }
+
+  var zoomLabel = el(prefix + "-zoom-label");
+  if (zoomLabel) zoomLabel.textContent = Math.round(state.scale * 100) + "%";
+}
+
+function zoomMapFor(prefix, state, factor, anchorX, anchorY) {
+  var viewport = el(prefix + "-viewport");
+  if (!viewport || !state) return;
+
+  var prev = state.scale;
+  var next = clampMapZoomFor(prefix, prev * factor);
+  if (next === prev) {
+    applyMapViewportFor(prefix, state);
+    return;
+  }
+
+  var px = anchorX == null ? (viewport.clientWidth / 2) : anchorX;
+  var py = anchorY == null ? (viewport.clientHeight / 2) : anchorY;
+  state.offsetX = px - ((px - state.offsetX) * next / prev);
+  state.offsetY = py - ((py - state.offsetY) * next / prev);
+  state.scale = next;
+  applyMapViewportFor(prefix, state);
+}
+
+function centerMapOnLocationFor(prefix, state, locationId) {
+  var loc = getMapLocationById(locationId);
+  var viewport = el(prefix + "-viewport");
+  if (!loc || !viewport || !state) return;
+
+  var bounds = getMapBounds();
+  var worldX = ((loc.x - bounds.minX) * MAP_GRID_SIZE_PX) + (MAP_GRID_SIZE_PX / 2);
+  var worldY = ((loc.y - bounds.minY) * MAP_GRID_SIZE_PX) + (MAP_GRID_SIZE_PX / 2);
+
+  state.offsetX = (viewport.clientWidth / 2) - (worldX * state.scale);
+  state.offsetY = (viewport.clientHeight / 2) - (worldY * state.scale);
+  applyMapViewportFor(prefix, state);
+}
+
+function resetMapViewFor(prefix, state) {
+  var viewport = el(prefix + "-viewport");
+  var metrics = getMapWorldMetrics();
+  if (!viewport || !state) return;
+
+  state.scale = getMapMinZoomFor(prefix);
+  state.offsetX = (viewport.clientWidth - (metrics.worldWidth * state.scale)) / 2;
+  state.offsetY = (viewport.clientHeight - (metrics.worldHeight * state.scale)) / 2;
+  applyMapViewportFor(prefix, state);
+}
+
+function getMapMinZoom() {
+  return getMapMinZoomFor("map");
+}
+
+function clampMapZoom(value) {
+  return clampMapZoomFor("map", value);
+}
+
+function applyMapViewport() {
+  applyMapViewportFor("map", mapUiState);
+}
+
+function zoomMap(factor, anchorX, anchorY) {
+  zoomMapFor("map", mapUiState, factor, anchorX, anchorY);
+}
+
+function centerMapOnLocation(locationId) {
+  centerMapOnLocationFor("map", mapUiState, locationId);
+}
+
+function resetMapView() {
+  resetMapViewFor("map", mapUiState);
+}
+
+function buildMapViewerHtml(options) {
+  var prefix = options && options.prefix ? options.prefix : "map";
+  var locations = (options && Array.isArray(options.locations)) ? options.locations : [];
+  var selectedId = options ? options.selectedId : null;
+  var showConnections = !!(options && options.showConnections);
+  var includeOpenButton = !!(options && options.includeOpenButton);
+  var toolbarMeta = (options && options.toolbarMeta)
+    ? options.toolbarMeta
+    : "Scroll to zoom • drag to pan • click a marker to center it • minor grid appears as you zoom in";
+
+  var bounds = getMapBounds();
+  var worldWidth = (bounds.maxX - bounds.minX + 1) * MAP_GRID_SIZE_PX;
+  var worldHeight = (bounds.maxY - bounds.minY + 1) * MAP_GRID_SIZE_PX;
+
+  var xLabels = "";
+  for (var x = bounds.minX; x <= bounds.maxX; x += 5) {
+    xLabels += '<div class="map-axis-label map-axis-label-x" style="left:' + (((x - bounds.minX) * MAP_GRID_SIZE_PX) + (MAP_GRID_SIZE_PX / 2)) + 'px">' + x + '</div>';
+  }
+
+  var yLabels = "";
+  for (var y = bounds.minY; y <= bounds.maxY; y += 5) {
+    yLabels += '<div class="map-axis-label map-axis-label-y" style="top:' + (((y - bounds.minY) * MAP_GRID_SIZE_PX) + (MAP_GRID_SIZE_PX / 2)) + 'px">' + y + '</div>';
+  }
+
+  var axisLines = "";
+  if (bounds.minX <= 0 && bounds.maxX >= 0) {
+    axisLines += '<div class="map-axis-line map-axis-line-x" style="left:' + (((0 - bounds.minX) * MAP_GRID_SIZE_PX) + (MAP_GRID_SIZE_PX / 2)) + 'px"></div>';
+  }
+  if (bounds.minY <= 0 && bounds.maxY >= 0) {
+    axisLines += '<div class="map-axis-line map-axis-line-y" style="top:' + (((0 - bounds.minY) * MAP_GRID_SIZE_PX) + (MAP_GRID_SIZE_PX / 2)) + 'px"></div>';
+  }
+
+  var viewerHtml = '';
+  viewerHtml += '<div class="map-shell">';
+  viewerHtml += '<div class="map-toolbar">';
+  viewerHtml += '<div class="inventory-actions map-toolbar-buttons">';
+  viewerHtml += '<button type="button" class="mini-btn" id="' + prefix + '-zoom-out-btn" aria-label="Zoom out">−</button>';
+  viewerHtml += '<button type="button" class="mini-btn" id="' + prefix + '-zoom-in-btn" aria-label="Zoom in">+</button>';
+  viewerHtml += '<button type="button" class="mini-btn" id="' + prefix + '-reset-view-btn">Fit whole map</button>';
+  if (includeOpenButton) {
+    viewerHtml += '<button type="button" class="mini-btn map-open-window-btn" id="' + prefix + '-open-window-btn">Open full-window map</button>';
+  }
+  viewerHtml += '<span class="trait-pill secondary" id="' + prefix + '-zoom-label">100%</span>';
+  viewerHtml += '</div>';
+  viewerHtml += '<div class="map-toolbar-meta">' + escapeHtml(toolbarMeta) + '</div>';
+  viewerHtml += '</div>';
+  viewerHtml += '<div class="map-viewport" id="' + prefix + '-viewport">';
+  viewerHtml += '<div class="map-stage" id="' + prefix + '-stage">';
+  viewerHtml += '<div class="map-world" id="' + prefix + '-world" style="width:' + worldWidth + 'px;height:' + worldHeight + 'px;--map-grid-size:' + MAP_GRID_SIZE_PX + 'px;--map-major-size:' + (MAP_GRID_SIZE_PX * 5) + 'px">';
+  viewerHtml += '<svg class="map-connection-overlay" viewBox="0 0 ' + worldWidth + ' ' + worldHeight + '" preserveAspectRatio="none" aria-hidden="true">';
+  if (showConnections) {
+    getAllMapConnections().forEach(function(conn) {
+      var x1 = ((conn.fromX - bounds.minX) * MAP_GRID_SIZE_PX) + (MAP_GRID_SIZE_PX / 2);
+      var y1 = ((conn.fromY - bounds.minY) * MAP_GRID_SIZE_PX) + (MAP_GRID_SIZE_PX / 2);
+      var x2 = ((conn.toX - bounds.minX) * MAP_GRID_SIZE_PX) + (MAP_GRID_SIZE_PX / 2);
+      var y2 = ((conn.toY - bounds.minY) * MAP_GRID_SIZE_PX) + (MAP_GRID_SIZE_PX / 2);
+      viewerHtml += '<line class="map-connection-line" x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 + '"></line>';
+    });
+  }
+  viewerHtml += '</svg>';
+  viewerHtml += axisLines + xLabels + yLabels;
+
+  locations.forEach(function(loc) {
+    var left = ((loc.x - bounds.minX) * MAP_GRID_SIZE_PX) + (MAP_GRID_SIZE_PX / 2);
+    var top = ((loc.y - bounds.minY) * MAP_GRID_SIZE_PX) + (MAP_GRID_SIZE_PX / 2);
+    var ringDiameter = (loc.radius || 0) * MAP_GRID_SIZE_PX * 2;
+    if (ringDiameter > 0) {
+      var ringClass = 'map-coverage-ring' + (selectedId != null && loc.id === selectedId ? ' active' : '');
+      viewerHtml += '<div class="' + ringClass + '" style="left:' + left + 'px;top:' + top + 'px;width:' + ringDiameter + 'px;height:' + ringDiameter + 'px" aria-hidden="true"></div>';
+    }
+  });
+
+  locations.forEach(function(loc) {
+    var left = ((loc.x - bounds.minX) * MAP_GRID_SIZE_PX) + (MAP_GRID_SIZE_PX / 2);
+    var top = ((loc.y - bounds.minY) * MAP_GRID_SIZE_PX) + (MAP_GRID_SIZE_PX / 2);
+    var hue = getMapTypeHue(loc.type);
+    var activeClass = selectedId != null && loc.id === selectedId ? ' active' : '';
+    viewerHtml += '<button type="button" class="map-marker' + activeClass + '" data-id="' + loc.id + '" style="left:' + left + 'px;top:' + top + 'px;--marker-h:' + hue + '" title="' + escapeHtml(loc.name + ' (' + loc.type + ')') + '">';
+    viewerHtml += '<span class="map-marker-dot"></span>';
+    viewerHtml += '<span class="map-marker-label">' + escapeHtml(loc.name) + '</span>';
+    if (loc.spoiler) viewerHtml += '<span class="map-marker-spoiler">?</span>';
+    viewerHtml += '</button>';
+  });
+
+  viewerHtml += '</div></div></div></div>';
+  viewerHtml += '</div>';
+  return viewerHtml;
+}
+
+function getVisibleMapLocations() {
+  var query = String(referenceState.mapSearch || "").trim().toLowerCase();
+  return getAllMapLocations().filter(function(loc) {
+    if (referenceState.mapType !== "all" && loc.type !== referenceState.mapType) return false;
+    if (referenceState.mapHideSpoilers && loc.spoiler) return false;
+    if (!query) return true;
+
+    var hay = [
+      loc.name,
+      loc.type,
+      loc.note || "",
+      "x " + loc.x,
+      "y " + loc.y,
+      String(loc.x) + "," + String(loc.y)
+    ].join(" ").toLowerCase();
+
+    return hay.indexOf(query) !== -1;
+  }).sort(function(a, b) {
+    if (a.y !== b.y) return a.y - b.y;
+    if (a.x !== b.x) return a.x - b.x;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function renderMapReferenceFilters() {
+  var types = (typeof MAP_LOCATION_TYPES !== "undefined" && Array.isArray(MAP_LOCATION_TYPES))
+    ? MAP_LOCATION_TYPES.slice()
+    : getAllMapLocations().map(function(loc) { return loc.type; }).filter(function(type, idx, arr) {
+        return arr.indexOf(type) === idx;
+      }).sort();
+
+  renderFilterChips("map-type-filters", [{ value: "all", label: "All types" }].concat(types.map(function(type) {
+    return { value: type, label: type };
+  })), referenceState.mapType, function(value) {
+    referenceState.mapType = value;
+    renderMapReference();
+  });
+
+  var searchInput = el("map-search-input");
+  if (searchInput) {
+    searchInput.value = referenceState.mapSearch || "";
+    searchInput.oninput = function() {
+      referenceState.mapSearch = searchInput.value || "";
+      renderMapReference();
+    };
+  }
+
+  var hideSpoilers = el("map-hide-spoilers");
+  if (hideSpoilers) {
+    hideSpoilers.checked = !!referenceState.mapHideSpoilers;
+    hideSpoilers.onchange = function() {
+      referenceState.mapHideSpoilers = !!hideSpoilers.checked;
+      renderMapReference();
+    };
+  }
+
+  var showConnections = el("map-show-connections");
+  if (showConnections) {
+    showConnections.checked = !!referenceState.mapShowConnections;
+    showConnections.onchange = function() {
+      referenceState.mapShowConnections = !!showConnections.checked;
+      renderMapReference();
+    };
+  }
+}
+
+function formatMapNorthingText(y) {
+  if (y < 0) return (Math.abs(y) * 100) + "m north";
+  if (y > 0) return (y * 100) + "m south";
+  return "0m reference line";
+}
+
+function selectMapLocation(locationId, shouldCenter) {
+  mapUiState.selectedId = locationId;
+  renderMapReference();
+  if (shouldCenter) centerMapOnLocation(locationId);
+}
+
+function attachMapInteractionHandlersFor(prefix, state, onMarkerSelect, onOpenWindow) {
+  var viewport = el(prefix + "-viewport");
+  if (!viewport || !state) return;
+
+  viewport.addEventListener("wheel", function(evt) {
+    evt.preventDefault();
+    var rect = viewport.getBoundingClientRect();
+    zoomMapFor(prefix, state, evt.deltaY < 0 ? 1.15 : (1 / 1.15), evt.clientX - rect.left, evt.clientY - rect.top);
+  }, { passive: false });
+
+  viewport.addEventListener("pointerdown", function(evt) {
+    if (evt.target && evt.target.closest && evt.target.closest(".map-marker")) return;
+    state.dragging = true;
+    state.pointerId = evt.pointerId;
+    state.dragStartX = evt.clientX;
+    state.dragStartY = evt.clientY;
+    state.startOffsetX = state.offsetX;
+    state.startOffsetY = state.offsetY;
+    viewport.classList.add("dragging");
+    if (viewport.setPointerCapture) viewport.setPointerCapture(evt.pointerId);
+  });
+
+  viewport.addEventListener("pointermove", function(evt) {
+    if (!state.dragging || state.pointerId !== evt.pointerId) return;
+    state.offsetX = state.startOffsetX + (evt.clientX - state.dragStartX);
+    state.offsetY = state.startOffsetY + (evt.clientY - state.dragStartY);
+    applyMapViewportFor(prefix, state);
+  });
+
+  function endMapDrag(evt) {
+    if (state.pointerId !== evt.pointerId) return;
+    state.dragging = false;
+    state.pointerId = null;
+    viewport.classList.remove("dragging");
+  }
+
+  viewport.addEventListener("pointerup", endMapDrag);
+  viewport.addEventListener("pointercancel", endMapDrag);
+
+  var zoomOutBtn = el(prefix + "-zoom-out-btn");
+  if (zoomOutBtn) zoomOutBtn.addEventListener("click", function() { zoomMapFor(prefix, state, 1 / 1.2); });
+  var zoomInBtn = el(prefix + "-zoom-in-btn");
+  if (zoomInBtn) zoomInBtn.addEventListener("click", function() { zoomMapFor(prefix, state, 1.2); });
+  var resetBtn = el(prefix + "-reset-view-btn");
+  if (resetBtn) resetBtn.addEventListener("click", function() { resetMapViewFor(prefix, state); });
+  var openBtn = el(prefix + "-open-window-btn");
+  if (openBtn && typeof onOpenWindow === "function") openBtn.addEventListener("click", onOpenWindow);
+
+  Array.prototype.forEach.call(viewport.querySelectorAll(".map-marker"), function(node) {
+    node.addEventListener("click", function() {
+      var id = parseInt(node.getAttribute("data-id"), 10);
+      if (isNaN(id)) return;
+      if (typeof onMarkerSelect === "function") {
+        onMarkerSelect(id);
+      } else {
+        centerMapOnLocationFor(prefix, state, id);
+      }
+    });
+  });
+}
+
+function attachMapInteractionHandlers() {
+  attachMapInteractionHandlersFor("map", mapUiState, function(id) {
+    selectMapLocation(id, true);
+  }, openFullWindowMapModal);
+}
+
+function renderFullWindowMapModal(shouldResetToFit, centerLocationId) {
+  var viewerEl = el("map-full-window-viewer");
+  if (!viewerEl) return;
+
+  var locations = getAllMapLocations();
+  if (!locations.length) {
+    viewerEl.innerHTML = '<div class="info-box map-viewer-empty">No map data is loaded yet.</div>';
+    return;
+  }
+
+  viewerEl.innerHTML = buildMapViewerHtml({
+    prefix: "map-full-window",
+    locations: locations,
+    selectedId: mapFullWindowUiState.selectedId,
+    showConnections: true,
+    includeOpenButton: false,
+    toolbarMeta: "Full-window view • all known locations, radar rings, and connection lines are shown",
+  });
+
+  attachMapInteractionHandlersFor("map-full-window", mapFullWindowUiState, function(id) {
+    mapFullWindowUiState.selectedId = id;
+    renderFullWindowMapModal(false, id);
+  });
+
+  if (shouldResetToFit) {
+    resetMapViewFor("map-full-window", mapFullWindowUiState);
+  } else {
+    applyMapViewportFor("map-full-window", mapFullWindowUiState);
+  }
+
+  if (centerLocationId != null) {
+    centerMapOnLocationFor("map-full-window", mapFullWindowUiState, centerLocationId);
+  }
+}
+
+function openFullWindowMapModal() {
+  var modal = el("map-full-window-modal");
+  if (!modal) return;
+
+  mapFullWindowUiState = createMapViewerState();
+  mapFullWindowUiState.selectedId = mapUiState.selectedId;
+  modal.classList.remove("is-hidden");
+  renderFullWindowMapModal(true);
+}
+
+function closeFullWindowMapModal() {
+  var modal = el("map-full-window-modal");
+  if (!modal) return;
+  modal.classList.add("is-hidden");
+}
+
+function renderMapReference() {
+  var metaEl = el("map-reference-meta");
+  var viewerEl = el("map-viewer");
+  var detailsEl = el("map-selected-details");
+  var listEl = el("map-location-list");
+  if (!metaEl || !viewerEl || !detailsEl || !listEl) return;
+
+  renderMapReferenceFilters();
+
+  var allLocations = getAllMapLocations();
+  var visible = getVisibleMapLocations();
+  var spoilerTotal = allLocations.filter(function(loc) { return !!loc.spoiler; }).length;
+
+  var selected = getMapLocationById(mapUiState.selectedId);
+  if (!selected || visible.indexOf(selected) === -1) {
+    selected = visible.length ? visible[0] : null;
+    mapUiState.selectedId = selected ? selected.id : null;
+  }
+
+  metaEl.textContent = visible.length + " location" + (visible.length === 1 ? "" : "s")
+    + " shown on the 100m grid. Negative Y is north."
+    + (spoilerTotal ? (" " + spoilerTotal + " unknown entr" + (spoilerTotal === 1 ? "y is" : "ies are") + " spoiler-tagged.") : "");
+
+  if (selected) {
+    var detailsHtml = "<strong>" + escapeHtml(selected.name) + "</strong> • " + escapeHtml(selected.type)
+      + " • X " + selected.x + ", Y " + selected.y + " (" + escapeHtml(formatMapNorthingText(selected.y)) + ")";
+    if ((selected.radius || 0) > 0) {
+      detailsHtml += " • <span class=\"trait-pill secondary\">Radar radius " + escapeHtml(String(selected.radius)) + " grids</span>";
+    }
+    if (selected.spoiler) {
+      detailsHtml += " • <span class=\"trait-pill secondary\">Spoiler-tagged</span>";
+    }
+    if (selected.note) {
+      detailsHtml += "<div class=\"reference-section-title\">Note</div><div class=\"reference-tooltip\">" + escapeHtml(selected.note) + "</div>";
+    }
+    detailsEl.innerHTML = detailsHtml;
+  } else {
+    detailsEl.innerHTML = "Select a location to see details.";
+  }
+
+  if (!allLocations.length) {
+    viewerEl.innerHTML = '<div class="info-box map-viewer-empty">No map data is loaded yet.</div>';
+    listEl.innerHTML = '<div class="info-box">No locations available.</div>';
+    return;
+  }
+
+  if (!visible.length) {
+    viewerEl.innerHTML = '<div class="info-box map-viewer-empty">No locations match the current filters.</div>';
+    listEl.innerHTML = '<div class="info-box">Try a different search or filter.</div>';
+    return;
+  }
+
+  viewerEl.innerHTML = buildMapViewerHtml({
+    prefix: "map",
+    locations: visible,
+    selectedId: selected ? selected.id : null,
+    showConnections: !!referenceState.mapShowConnections,
+    includeOpenButton: true,
+    toolbarMeta: "Scroll to zoom • drag to pan • click a marker to center it • minor grid appears as you zoom in",
+  });
+
+  var listHtml = '';
+  visible.forEach(function(loc) {
+    var cardClass = 'reference-card map-location-card' + (selected && loc.id === selected.id ? ' active' : '');
+    listHtml += '<article class="' + cardClass + '" data-id="' + loc.id + '">';
+    listHtml += '<div class="reference-card-header">';
+    listHtml += '<div>';
+    listHtml += '<div class="reference-card-title">' + escapeHtml(loc.name) + '</div>';
+    listHtml += '<div class="reference-card-meta">X ' + loc.x + ' • Y ' + loc.y + ' • ' + escapeHtml(formatMapNorthingText(loc.y)) + '</div>';
+    listHtml += '</div>';
+    listHtml += '<div><span class="trait-pill secondary">' + escapeHtml(loc.type) + '</span></div>';
+    listHtml += '</div>';
+    listHtml += '<div class="trait-pill-row map-location-meta">';
+    if ((loc.radius || 0) > 0) listHtml += '<span class="trait-pill secondary">Radius ' + escapeHtml(String(loc.radius)) + ' grids</span>';
+    if (loc.spoiler) listHtml += '<span class="trait-pill secondary">Spoiler-tagged</span>';
+    if (loc.note) listHtml += '<span class="trait-pill">Note</span>';
+    listHtml += '</div>';
+    if (loc.note) {
+      listHtml += '<div class="reference-tooltip">' + escapeHtml(loc.note) + '</div>';
+    }
+    listHtml += '</article>';
+  });
+  listEl.innerHTML = listHtml;
+
+  Array.prototype.forEach.call(listEl.querySelectorAll(".map-location-card"), function(node) {
+    node.addEventListener("click", function() {
+      var id = parseInt(node.getAttribute("data-id"), 10);
+      if (!isNaN(id)) selectMapLocation(id, true);
+    });
+  });
+
+  attachMapInteractionHandlers();
+  if (!mapUiState.initialized) {
+    mapUiState.initialized = true;
+    resetMapView();
+  } else {
+    applyMapViewport();
+  }
+}
+
 function refreshReferenceViews() {
   renderProfessionReference();
   renderFoodReference();
   renderMemoryReference();
+  renderMapReference();
 }
 
 function getPlannedProfessionCounts() {
@@ -3294,6 +3886,12 @@ function init() {
   el("plan-share-modal").addEventListener("click", function(evt) {
     if (evt.target && evt.target.id === "plan-share-modal") {
       closePlanShareModal();
+    }
+  });
+  el("map-full-window-close-btn").addEventListener("click", closeFullWindowMapModal);
+  el("map-full-window-modal").addEventListener("click", function(evt) {
+    if (evt.target && evt.target.id === "map-full-window-modal") {
+      closeFullWindowMapModal();
     }
   });
 

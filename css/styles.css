@@ -1332,6 +1332,306 @@ body.theme-peco .progress-bar-fill-planned {
   font-size: 12px;
 }
 
+.map-controls-row {
+  align-items: end;
+}
+
+.map-toggle-col {
+  display: flex;
+  align-items: center;
+}
+
+.map-toggle-stack {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.map-shell {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.map-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.map-toolbar-meta {
+  font-size: 11px;
+  color: var(--text-sec);
+}
+
+.map-open-window-btn {
+  margin-left: 4px;
+}
+
+.map-viewport {
+  position: relative;
+  height: 480px;
+  overflow: hidden;
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-secondary);
+  cursor: grab;
+  touch-action: none;
+}
+
+.map-full-window-modal {
+  align-items: stretch;
+  padding: 10px;
+  z-index: 40;
+}
+
+.map-full-window-card {
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.map-full-window-note {
+  margin: 2px 0 0;
+  padding: 0;
+}
+
+.map-full-window-viewer {
+  min-height: 0;
+}
+
+.map-full-window-viewer .map-shell {
+  height: 100%;
+  margin-bottom: 0;
+}
+
+.map-full-window-viewer .map-viewport {
+  height: calc(100vh - 132px);
+  min-height: 520px;
+}
+
+.map-viewport.dragging {
+  cursor: grabbing;
+}
+
+.map-stage {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.map-world {
+  --map-grid-minor-alpha: 0.08;
+  --map-grid-major-alpha: 0.16;
+  --map-marker-size: 14px;
+  --map-marker-border: 2px;
+  --map-ring-border: 2px;
+  --map-marker-label-font-size: 10px;
+  --map-marker-label-offset-x: 18px;
+  --map-marker-label-offset-y: -10px;
+  position: relative;
+  border-radius: 10px;
+  background-color: rgba(70, 110, 160, 0.04);
+  background-image:
+    linear-gradient(to right, rgba(0, 0, 0, var(--map-grid-minor-alpha)) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, var(--map-grid-minor-alpha)) 1px, transparent 1px),
+    linear-gradient(to right, rgba(0, 0, 0, var(--map-grid-major-alpha)) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, var(--map-grid-major-alpha)) 1px, transparent 1px);
+  background-size:
+    var(--map-grid-size) var(--map-grid-size),
+    var(--map-grid-size) var(--map-grid-size),
+    var(--map-major-size) var(--map-major-size),
+    var(--map-major-size) var(--map-major-size);
+}
+
+.map-connection-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  overflow: visible;
+}
+
+.map-connection-line {
+  stroke: rgba(24, 95, 165, 0.38);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.map-axis-line {
+  position: absolute;
+  background: rgba(24, 95, 165, 0.45);
+  pointer-events: none;
+}
+
+.map-axis-line-x {
+  top: 0;
+  bottom: 0;
+  width: 2px;
+}
+
+.map-axis-line-y {
+  left: 0;
+  right: 0;
+  height: 2px;
+}
+
+.map-axis-label {
+  position: absolute;
+  z-index: 1;
+  padding: 1px 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 0.5px solid var(--border);
+  color: var(--text-sec);
+  font-size: 10px;
+  line-height: 1.2;
+  pointer-events: none;
+}
+
+.map-axis-label-x {
+  top: 6px;
+  transform: translateX(-50%);
+}
+
+.map-axis-label-y {
+  left: 6px;
+  transform: translateY(-50%);
+}
+
+.map-coverage-ring {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: var(--map-ring-border) solid rgba(214, 48, 173, 0.9);
+  background: transparent;
+  box-shadow: 0 0 0 1px rgba(214, 48, 173, 0.12);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.map-coverage-ring.active {
+  border-color: rgba(255, 77, 206, 1);
+  box-shadow: 0 0 0 2px rgba(255, 77, 206, 0.12), 0 0 18px rgba(255, 77, 206, 0.2);
+}
+
+.map-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.map-marker-dot {
+  display: block;
+  width: var(--map-marker-size);
+  height: var(--map-marker-size);
+  border-radius: 50%;
+  background: hsl(var(--marker-h) 62% 48%);
+  border: var(--map-marker-border) solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.16), 0 1px 6px rgba(0, 0, 0, 0.18);
+}
+
+.map-marker-label {
+  position: absolute;
+  left: var(--map-marker-label-offset-x);
+  top: var(--map-marker-label-offset-y);
+  display: none;
+  max-width: 180px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 0.5px solid var(--border);
+  color: var(--text);
+  font-size: var(--map-marker-label-font-size);
+  white-space: nowrap;
+}
+
+.map-marker:hover .map-marker-label,
+.map-marker.active .map-marker-label {
+  display: inline-block;
+}
+
+.map-marker.active .map-marker-dot {
+  transform: scale(1.25);
+  box-shadow: 0 0 0 2px hsl(var(--marker-h) 72% 82% / 0.95), 0 0 12px hsl(var(--marker-h) 65% 56% / 0.38);
+}
+
+.map-marker-spoiler {
+  position: absolute;
+  top: -13px;
+  left: 7px;
+  min-width: 12px;
+  height: 12px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--bg-warn);
+  color: var(--text-warn);
+  font-size: 9px;
+  line-height: 12px;
+  text-align: center;
+}
+
+.map-location-card {
+  cursor: pointer;
+}
+
+.map-location-card.active {
+  border-color: var(--text-info);
+  box-shadow: inset 0 0 0 1px rgba(24, 95, 165, 0.18);
+}
+
+.map-location-meta {
+  margin-bottom: 8px;
+}
+
+body.theme-peco .map-world {
+  background-color: rgba(16, 55, 28, 0.35);
+  background-image:
+    linear-gradient(to right, rgba(33, 255, 123, var(--map-grid-minor-alpha)) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(33, 255, 123, var(--map-grid-minor-alpha)) 1px, transparent 1px),
+    linear-gradient(to right, rgba(33, 255, 123, calc(var(--map-grid-major-alpha) + 0.06)) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(33, 255, 123, calc(var(--map-grid-major-alpha) + 0.06)) 1px, transparent 1px);
+}
+
+body.theme-peco .map-connection-line {
+  stroke: rgba(33, 255, 123, 0.34);
+}
+
+body.theme-peco .map-axis-line {
+  background: rgba(33, 255, 123, 0.4);
+}
+
+body.theme-peco .map-axis-label,
+body.theme-peco .map-marker-label {
+  background: rgba(2, 15, 8, 0.94);
+  border-color: rgba(33, 255, 123, 0.35);
+  color: #7cffb3;
+}
+
+body.theme-peco .map-coverage-ring {
+  border-color: rgba(255, 72, 215, 0.92);
+  box-shadow: 0 0 0 1px rgba(255, 72, 215, 0.12);
+}
+
+body.theme-peco .map-coverage-ring.active {
+  border-color: rgba(255, 118, 228, 1);
+  box-shadow: 0 0 0 2px rgba(255, 72, 215, 0.12), 0 0 18px rgba(255, 72, 215, 0.22);
+}
+
 /* ─── Coverage grids ─────────────────────────────────────────────────────────── */
 .cov-grid {
   display: grid;
@@ -1487,6 +1787,14 @@ strong { font-weight: 500; }
 
   .inventory-grid-wrap {
     grid-template-columns: 1fr;
+  }
+
+  .map-controls-row {
+    grid-template-columns: 1fr;
+  }
+
+  .map-viewport {
+    height: 360px;
   }
 
   .reference-grid {
